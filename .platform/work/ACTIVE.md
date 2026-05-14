@@ -5,7 +5,7 @@
 
 | Stream | Type | Status | Agent | Last updated |
 |---|---|---|---|---|
-| `diff-visibility-project-repos` | bugfix | awaiting-verification | codex | 2026-05-14 |
+| diff-visibility-project-repos | bugfix | awaiting-verification | codex | 2026-05-14 |
 
 ---
 
