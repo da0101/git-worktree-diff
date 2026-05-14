@@ -3,9 +3,9 @@
 > Read this first — every session, every agent (Claude, Codex, Gemini).
 > 30-second orientation: what we're building, why, and where we stand.
 
-**Feature:** Diff visibility and Agentboard project repo/worktree discovery
-**Status:** Planning
-**Stream file:** `work/diff-visibility-project-repos.md`
+**Feature:** VS Code native sidebar
+**Status:** In progress
+**Stream file:** `work/vscode-native-sidebar.md`
 
 ---
 
@@ -33,7 +33,7 @@ Developers and AI-assisted workflows need a fast, trustworthy way to inspect loc
 
 ## Current state
 
-The initial local repo tracker, branch selector, diff viewer, and Git actions exist. The active stream is fixing the current diff pane clipping/scrolling failure first, then shaping Agentboard project/repo/worktree discovery for projects such as `takecare-platform`.
+The initial local repo tracker, branch selector, diff viewer, and Git actions exist. One stream is awaiting user verification for diff visibility and Agentboard project repo discovery. The VS Code editor-tab workbench stream has been manually verified and is awaiting commit approval. The current active stream adds a native-feeling Activity Bar/sidebar surface while keeping the full React diff workbench as the wide editor view.
 
 See `work/ACTIVE.md` for stream status.
 
@@ -42,6 +42,7 @@ See `work/ACTIVE.md` for stream status.
 > Only load the files listed here. Everything else is out of scope unless the current stream says otherwise.
 
 - `.platform/domains/git-worktrees.md` — core repo, branch, worktree, diff, and Git action behavior
+- `.platform/domains/vscode-extension.md` — VS Code extension packaging and webview boundaries
 - `.platform/domains/agentboard-projects.md` — future Agentboard project/repo/worktree grouping behavior
 - `.platform/conventions/react-vite.md` — frontend conventions for the workbench UI
 - `.platform/conventions/nodejs.md` — backend conventions for local Git command execution

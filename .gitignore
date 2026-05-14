@@ -19,6 +19,7 @@ node_modules/
 # builds
 dist/
 */dist/
+*/out/
 
 # local/editor artifacts
 .DS_Store
