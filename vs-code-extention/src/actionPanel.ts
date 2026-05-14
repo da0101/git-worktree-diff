@@ -30,7 +30,7 @@ type PanelMessage =
 export class ActionPanelProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView
   private activeTargetLabel = 'No worktree selected'
-  private agentContextLabel = 'No agent context selected'
+  private explicitAgentContextLabel: string | undefined
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -70,12 +70,28 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
   }
 
   composeAgent(label: string) {
-    this.agentContextLabel = label
+    this.explicitAgentContextLabel = label
     this.view?.show()
     void this.view?.webview.postMessage({
       type: 'composeAgent',
-      agentContextLabel: this.agentContextLabel,
+      agentContextLabel: this.getAgentContextLabel(this.treeProvider.getSelectionSummary()),
     })
+    this.postState()
+  }
+
+  composeSelectedAgent() {
+    this.explicitAgentContextLabel = undefined
+    const summary = this.treeProvider.getSelectionSummary()
+    this.view?.show()
+    void this.view?.webview.postMessage({
+      type: 'composeAgent',
+      agentContextLabel: this.getAgentContextLabel(summary),
+    })
+    this.postState()
+  }
+
+  clearAgentContext() {
+    this.explicitAgentContextLabel = undefined
     this.postState()
   }
 
@@ -86,12 +102,16 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       selectedFiles: summary.selectedFiles,
       repositories: summary.repositories,
       activeTargetLabel: this.activeTargetLabel,
-      agentContextLabel: this.agentContextLabel === 'No agent context selected' && summary.selectedFiles > 0
-        ? `${summary.selectedFiles} selected file(s)`
-        : this.agentContextLabel,
+      agentContextLabel: this.getAgentContextLabel(summary),
       terminals: this.getTerminalOptions(),
       branches: this.getBranchOptions(),
     })
+  }
+
+  private getAgentContextLabel(summary: { selectedFiles: number }) {
+    if (this.explicitAgentContextLabel) return this.explicitAgentContextLabel
+    if (summary.selectedFiles > 0) return `${summary.selectedFiles} selected file(s)`
+    return 'No agent context selected'
   }
 
   private render() {
@@ -190,6 +210,24 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     textarea.agent {
       min-height: 120px;
     }
+    .button-stack {
+      display: grid;
+      gap: 8px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      margin-right: 6px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      vertical-align: -1px;
+      animation: spin 700ms linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     .section {
       padding-top: 8px;
       margin-top: 8px;
@@ -259,8 +297,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
 
     <select id="terminal"></select>
     <textarea id="agentMessage" class="agent" placeholder="Ask Codex, Claude, or Gemini about the selected file(s) or highlighted code"></textarea>
-    <button id="sendAgent" class="primary">Send to terminal</button>
-    <button id="refreshTerminals" class="secondary">Refresh terminals</button>
+    <div class="button-stack">
+      <button id="sendAgent" class="primary">Send to terminal</button>
+      <button id="refreshTerminals" class="secondary">Refresh terminals</button>
+    </div>
     <p class="muted">Tip: select code in the diff/editor, then right-click and choose Send Selection to Agent. This panel will open with that snippet as context.</p>
   </section>
 
@@ -287,6 +327,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     const stashMessage = document.getElementById('stashMessage');
     const runGitAction = document.getElementById('runGitAction');
     const gitActionHint = document.getElementById('gitActionHint');
+    const refreshTerminals = document.getElementById('refreshTerminals');
     const gated = ['clear', 'commit']
       .map(id => document.getElementById(id));
     const selectedFileActions = new Set(['stageSelected', 'unstageSelected', 'ignoreSelected', 'discardSelected', 'amendSelected']);
@@ -308,7 +349,11 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     agentTab.addEventListener('click', () => setTab('agent'));
     document.getElementById('selectAll').addEventListener('click', () => send('selectAll'));
     document.getElementById('clear').addEventListener('click', () => send('clearSelection'));
-    document.getElementById('refreshTerminals').addEventListener('click', () => send('refreshTerminals'));
+    refreshTerminals.addEventListener('click', () => {
+      refreshTerminals.disabled = true;
+      refreshTerminals.innerHTML = '<span class="spinner"></span>Refreshing terminals';
+      send('refreshTerminals');
+    });
     document.getElementById('sendAgent').addEventListener('click', () => send('sendAgent', {
       message: agentMessage.value,
       terminalName: terminal.value,
@@ -367,6 +412,8 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       count.textContent = selectedFiles + (selectedFiles === 1 ? ' file' : ' files') + (repositories > 1 ? ' / ' + repositories + ' worktrees' : '');
       agentCount.textContent = count.textContent;
       gated.forEach(button => button.disabled = selectedFiles === 0);
+      refreshTerminals.disabled = false;
+      refreshTerminals.textContent = 'Refresh terminals';
       syncGitActionState();
       const oldValue = terminal.value;
       const oldBranch = rebaseBranch.value;

@@ -6,17 +6,18 @@ The browser workbench remains in `web/`. The extension code here ports the same 
 
 - Activity Bar container
 - Native Tree View for repos, worktrees, and changed files
-- Commands for refresh and opening the full workbench
-- Bridge into the React workbench only for the wide diff/review surface
+- Native VS Code diff editors for changed files
+- Sidebar action panel for selected-file commits, Git actions, and agent terminal handoff
+- Direct extension-host Git execution through argument-array commands
 
-Current bridge:
+Current flow:
 
 ```text
-VS Code Tree View -> extension commands -> React workbench panel -> backend on 127.0.0.1:8420
+VS Code Tree View -> VS Code diff editors -> extension-host Git logic
 ```
 
-Long-term target:
+Agent handoff flow:
 
 ```text
-VS Code Tree View -> VS Code diff editors and Git commands -> extension-host Git logic
+Selected files/editor selection -> Agent tab -> existing VS Code terminal
 ```

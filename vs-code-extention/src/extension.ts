@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new RepoTreeProvider()
   const decorationProvider = new GitWorktreeDiffDecorationProvider()
   let activeTarget: RepoTarget | undefined
-  let agentContext: AgentContext | undefined
+  let explicitAgentContext: AgentContext | undefined
   const treeView = vscode.window.createTreeView('gitWorktreeDiff.sidebar', {
     treeDataProvider: treeProvider,
     manageCheckboxStateManually: true,
@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (message.type === 'stashActive') await stashPanelTarget(activeTarget, treeProvider, message.message)
       if (message.type === 'rebaseActive') await rebasePanelTarget(activeTarget, treeProvider, message.branch)
       if (message.type === 'sendAgent') {
-        agentContext = agentContext ?? await buildChangedFilesAgentContext(treeProvider.getSelectedFiles())
+        const agentContext = explicitAgentContext ?? await buildChangedFilesAgentContext(treeProvider.getSelectedFiles())
         await sendAgentContext(context, agentContext, message.message, message.terminalName)
       }
       if (message.type === 'refreshTerminals') actionPanel.refresh()
@@ -50,6 +50,8 @@ export function activate(context: vscode.ExtensionContext) {
         treeProvider.setFileSelected(item.selection, state === vscode.TreeItemCheckboxState.Checked)
       }
     }
+    explicitAgentContext = undefined
+    actionPanel.clearAgentContext()
   })
 
   treeView.onDidChangeSelection(event => {
@@ -63,6 +65,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     treeView,
     vscode.window.registerFileDecorationProvider(decorationProvider),
+    vscode.window.onDidOpenTerminal(() => actionPanel.refresh()),
+    vscode.window.onDidCloseTerminal(() => actionPanel.refresh()),
+    vscode.window.onDidChangeActiveTerminal(() => actionPanel.refresh()),
+    vscode.window.onDidChangeTerminalState(() => actionPanel.refresh()),
     vscode.workspace.registerTextDocumentContentProvider(gitContentScheme, new GitContentProvider()),
     vscode.window.registerWebviewViewProvider('gitWorktreeDiff.actions', actionPanel),
     vscode.languages.registerCodeActionsProvider('*', {
@@ -137,20 +143,21 @@ export function activate(context: vscode.ExtensionContext) {
       await addSelectedToGitignore(treeProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendSelectionToAgent', async () => {
-      agentContext = buildEditorAgentContext(false)
-      if (agentContext) actionPanel.composeAgent(agentContext.label)
+      explicitAgentContext = buildEditorAgentContext(false)
+      if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendFileToAgent', async () => {
-      agentContext = buildEditorAgentContext(true)
-      if (agentContext) actionPanel.composeAgent(agentContext.label)
+      explicitAgentContext = buildEditorAgentContext(true)
+      if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendTreeFileToAgent', async (target: FileItem | WorkbenchSelection) => {
-      agentContext = await buildChangedFilesAgentContext([selectionFromTarget(target)])
-      if (agentContext) actionPanel.composeAgent(agentContext.label)
+      explicitAgentContext = await buildChangedFilesAgentContext([selectionFromTarget(target)])
+      if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendSelectedToAgent', async () => {
-      agentContext = await buildChangedFilesAgentContext(treeProvider.getSelectedFiles())
-      if (agentContext) actionPanel.composeAgent(agentContext.label)
+      explicitAgentContext = undefined
+      const agentContext = await buildChangedFilesAgentContext(treeProvider.getSelectedFiles())
+      if (agentContext) actionPanel.composeSelectedAgent()
     }),
   )
 }
