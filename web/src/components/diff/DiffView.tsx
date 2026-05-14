@@ -300,7 +300,7 @@ export function DiffView({
     <>
       <div className={`rounded-md border border-[var(--border)] overflow-hidden font-mono text-[11px] ${className}`} style={{ fontFamily: DIFF_FONT }}>
         {/* Header */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] border-b border-[var(--border)]/60">
+        <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] border-b border-[var(--border)]/60">
           <button
             onClick={() => setExpanded(e => !e)}
             className="flex cursor-pointer items-center gap-1.5 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
@@ -322,22 +322,20 @@ export function DiffView({
                 Expand all
               </button>
             )}
-            {totalLines > 200 && (
-              <button
-                onClick={() => setFullDiffOpen(true)}
-                className="flex cursor-pointer items-center gap-0.5 text-[var(--text-dim)] hover:text-[var(--text)] px-1.5 py-0.5 rounded text-[9px] hover:bg-[var(--border)] transition-colors"
-              >
-                <Maximize2 size={8} />
-                Full diff
-              </button>
-            )}
+            <button
+              onClick={() => setFullDiffOpen(true)}
+              className="flex cursor-pointer items-center gap-0.5 text-[var(--text-dim)] hover:text-[var(--text)] px-1.5 py-0.5 rounded text-[9px] hover:bg-[var(--border)] transition-colors"
+            >
+              <Maximize2 size={8} />
+              Full diff
+            </button>
           </div>
         </div>
 
         {/* Diff body */}
         {expanded && (
           mode === 'split' ? (
-            <div className="overflow-x-auto bg-[var(--bg)]">
+            <div className="diff-scroll-body bg-[var(--bg)]">
               {splitRows.map((row, index) => {
                 if (row.kind === 'hunk') {
                   return (
@@ -366,7 +364,7 @@ export function DiffView({
               })}
             </div>
           ) : (
-            <div className="overflow-x-auto bg-[var(--bg)]">
+            <div className="diff-scroll-body bg-[var(--bg)]">
               {(() => {
                 const hasAuthors = lineAuthors && Object.keys(lineAuthors).length > 0
                 let globalIdx = 0

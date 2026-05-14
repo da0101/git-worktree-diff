@@ -14,7 +14,7 @@
   --blue: #2563eb;
   --red: #dc2626;
   --yellow: #b7791f;
-  --panel-shadow: 0 18px 46px rgba(15, 23, 42, 0.12);
+  --panel-shadow: none;
 }
 
 :root[data-theme='dark'] {
@@ -31,7 +31,7 @@
   --blue: #75a7ff;
   --red: #ff7b86;
   --yellow: #ffd166;
-  --panel-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
+  --panel-shadow: none;
 }
 
 * {
@@ -134,6 +134,7 @@ textarea {
 }
 
 .diff-stage {
+  display: flex;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -144,7 +145,8 @@ textarea {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  overflow: auto;
+  gap: 12px;
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 
@@ -519,13 +521,24 @@ select:focus,
 .segmented button.active {
   background: var(--surface-strong);
   color: var(--text);
-  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.10);
+  box-shadow: none;
 }
 
 .diff-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   border-radius: 8px;
   box-shadow: var(--panel-shadow);
   min-height: 0;
+  overflow: hidden;
+}
+
+.diff-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .empty-state {
@@ -574,6 +587,11 @@ select:focus,
 
   .tool-rail,
   .diff-pane {
+    overflow: visible;
+  }
+
+  .diff-panel,
+  .diff-scroll-body {
     overflow: visible;
   }
 
