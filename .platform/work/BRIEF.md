@@ -3,9 +3,9 @@
 > Read this first — every session, every agent (Claude, Codex, Gemini).
 > 30-second orientation: what we're building, why, and where we stand.
 
-**Feature:** Project activation and product baseline
-**Status:** Activated baseline; no active implementation stream yet
-**Stream file:** None yet
+**Feature:** Diff visibility and Agentboard project repo/worktree discovery
+**Status:** Planning
+**Stream file:** `work/diff-visibility-project-repos.md`
 
 ---
 
@@ -33,7 +33,7 @@ Developers and AI-assisted workflows need a fast, trustworthy way to inspect loc
 
 ## Current state
 
-The initial local repo tracker, branch selector, diff viewer, and Git actions exist. The biggest current product gaps are precise full diff visibility, worktree visualization, and Agentboard project/repo grouping.
+The initial local repo tracker, branch selector, diff viewer, and Git actions exist. The active stream is fixing the current diff pane clipping/scrolling failure first, then shaping Agentboard project/repo/worktree discovery for projects such as `takecare-platform`.
 
 See `work/ACTIVE.md` for stream status.
 

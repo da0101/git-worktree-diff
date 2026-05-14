@@ -5,7 +5,7 @@
 
 | Stream | Type | Status | Agent | Last updated |
 |---|---|---|---|---|
-| _(none)_ | — | — | — | — |
+| `diff-visibility-project-repos` | bugfix | planning | codex | 2026-05-14 |
 
 ---
 
