@@ -78,7 +78,7 @@ export function FilesPanel({
                   aria-label={`Select ${file.path}`}
                 />
                 <span className={`status-pill ${statusClass(file.status)}`}>{statusLabel(file.status)}</span>
-                <span className="min-w-0 flex-1 truncate text-left">{file.path}</span>
+                <span className="file-path-label" title={file.path}>{file.path}</span>
                 <DiffBadge additions={file.parsed.additions} deletions={file.parsed.deletions} />
               </div>
             ))}

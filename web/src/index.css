@@ -469,12 +469,28 @@ select:focus,
   display: flex;
   width: 100%;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px;
   color: var(--text-dim);
+}
+
+.file-path-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.file-row .status-pill,
+.file-row input,
+.file-row .diff-badge {
+  flex: 0 0 auto;
 }
 
 .file-row:hover,
