@@ -1,0 +1,25 @@
+# agentboard:runtime-begin
+.platform/events.jsonl
+.platform/events-*.jsonl
+.platform/events.jsonl.archive-*
+.platform/.daemon-port
+.platform/.file-change-state.lock
+.platform/.file-change-state.lock.d/
+.platform/.file-change-state.tsv
+.platform/.file-locks.json
+.platform/.session-streams.tsv
+.platform/.watch.pid
+.platform/.watch/
+# agentboard:runtime-end
+
+# dependencies
+node_modules/
+*/node_modules/
+
+# builds
+dist/
+*/dist/
+
+# local/editor artifacts
+.DS_Store
+*.log
