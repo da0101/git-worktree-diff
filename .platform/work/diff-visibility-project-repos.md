@@ -2,7 +2,7 @@
 stream_id: stream-diff-visibility-project-repos
 slug: diff-visibility-project-repos
 type: bugfix
-status: planning
+status: awaiting-verification
 agent_owner: codex
 domain_slugs: [git-worktrees, agentboard-projects]
 repo_ids: [git-worktree-diff]
@@ -23,13 +23,13 @@ closure_approved: false
 - Out of scope for the first patch: hosted mode, AI review, remote Git providers, or destructive Git action changes.
 
 ## Done criteria
-- [ ] Selected file diff can be scrolled from top to bottom in the main pane.
-- [ ] Changed-line counts shown in the file list match inspectable rendered changes.
-- [ ] Unified and split modes remain usable with large diffs.
-- [ ] Agentboard project/repo/worktree discovery has a concrete follow-up plan or first minimal implementation, depending on research findings.
-- [ ] `npm run test`, `npm run lint`, and `npm run build` pass in `web/`.
-- [ ] Manual browser QA verifies the screenshot repro case or an equivalent large diff.
-- [ ] `.platform/memory/log.md` appended.
+- [x] Selected file diff can be scrolled from top to bottom in the main pane.
+- [x] Changed-line counts shown in the file list match inspectable rendered changes.
+- [x] Unified and split modes remain usable with large diffs.
+- [x] Agentboard project/repo/worktree discovery has a concrete follow-up plan or first minimal implementation, depending on research findings.
+- [x] `npm run test`, `npm run lint`, and `npm run build` pass in `web/`.
+- [x] Manual browser QA verifies the screenshot repro case or an equivalent large diff.
+- [x] `.platform/memory/log.md` appended.
 - [ ] `decisions.md` updated if any architectural choices were made.
 
 ## Key decisions
@@ -46,13 +46,14 @@ closure_approved: false
 ## Resume state
 
 - **Last updated:** 2026-05-14 by codex
-- **What just happened:** Stream created from user report that the diff pane cannot scroll through the full diff and Agentboard-managed repos are not visible under `takecare-platform`.
-- **Current focus:** Research the diff clipping root cause, prepare a separate worktree, then implement the full-diff visibility fix first.
-- **Next action:** Install/check dependencies in the stream worktree, inspect the diff container CSS and renderer, then patch.
-- **Blockers:** `develop` branch is absent; this stream uses `main` as the available base.
+- **What just happened:** Implemented bounded diff-body scrolling, always-visible Full diff access, removed clipped shadows, wrapped full filenames in the file list, and expanded Agentboard hub repos from `.platform/repos.md`.
+- **Current focus:** Awaiting user verification in the running app.
+- **Next action:** User should refresh/retry `takecare-platform`; if accepted, close the stream with human approval.
+- **Blockers:** none
 
 ## Progress log
 
+2026-05-14 20:55 — Merged fixes to `main`; restarted backend on `127.0.0.1:8420`; API now lists `takecare-platform` plus managed repos.
 2026-05-14 20:25 — Stream registered for diff visibility and Agentboard project repo/worktree discovery.
 2026-05-14 20:32 — Created isolated worktree at `/private/tmp/git-worktree-diff-diff-visibility-project-repos` on branch `bugfix-diff-visibility-project-repos`.
 2026-05-14 20:34 — Installed frontend dependencies in the stream worktree; npm reported an existing Node engine warning and moderate audit findings.
