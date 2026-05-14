@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, GitBranch, GitCompareArrows, Moon, Sun } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { GitCompareArrows, Moon, Sun } from 'lucide-react'
+import { CommitPanel } from '@/components/workbench/CommitPanel'
 import { DiffPane } from '@/components/workbench/DiffPane'
 import { FilesPanel } from '@/components/workbench/FilesPanel'
-import { GitActionsPanel } from '@/components/workbench/GitActionsPanel'
-import { RepositoryPanel } from '@/components/workbench/RepositoryPanel'
+import { RepoPicker } from '@/components/nav/RepoPicker'
+import { BranchPicker } from '@/components/nav/BranchPicker'
 import { api } from '@/lib/api'
 import { parseFileDiffs } from '@/lib/diffFiles'
 import type { DiffMode, GitActionResult, RepoSummary, Theme } from '@/types/git'
@@ -16,9 +17,35 @@ export default function App() {
   const [commitMessage, setCommitMessage] = useLocalStorageState('git-viewer-commit-message', '')
   const [rebaseBranch, setRebaseBranch] = useLocalStorageState('git-viewer-rebase-branch', '')
 
+  const [sidebarWidth, setSidebarWidth] = useLocalStorageState('git-viewer-sidebar-width', 280)
+  const isDragging = useRef(false)
+  const dragHandleRef = useRef<HTMLDivElement>(null)
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = Number(sidebarWidth)
+    isDragging.current = true
+    dragHandleRef.current?.classList.add('dragging')
+
+    const onMove = (e: MouseEvent) => {
+      const next = Math.max(180, Math.min(520, startWidth + e.clientX - startX))
+      setSidebarWidth(next)
+    }
+    const onUp = () => {
+      isDragging.current = false
+      dragHandleRef.current?.classList.remove('dragging')
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [sidebarWidth, setSidebarWidth])
+
   const [rawDiff, setRawDiff] = useState('')
   const [query, setQuery] = useState('')
   const [selectedPath, setSelectedPath] = useState('')
+  const [selectedWorktreePath, setSelectedWorktreePath] = useLocalStorageState('git-viewer-selected-worktree', '')
   const [repos, setRepos] = useState<RepoSummary[]>([])
   const [selectedFilePaths, setSelectedFilePaths] = useState<Set<string>>(new Set())
   const [gitOutput, setGitOutput] = useState('')
@@ -67,19 +94,55 @@ export default function App() {
     }
   }, [])
 
+  // Silent background poll — updates only when content actually changes, no spinner
+  const pollDiff = useCallback(async (repoPath: string) => {
+    if (!repoPath) return
+    try {
+      const params = new URLSearchParams({ path: repoPath })
+      const result = await api<{ path: string; diff: string }>(`/api/repos/diff?${params}`)
+      setRawDiff(prev => prev === result.diff ? prev : result.diff)
+    } catch { /* silent */ }
+  }, [])
+
+  const pollRepos = useCallback(async () => {
+    try {
+      const nextRepos = await api<RepoSummary[]>('/api/repos')
+      setRepos(prev => {
+        const prevJson = JSON.stringify(prev.map(r => ({ p: r.path, c: r.changedFiles, a: r.additions, d: r.deletions })))
+        const nextJson = JSON.stringify(nextRepos.map(r => ({ p: r.path, c: r.changedFiles, a: r.additions, d: r.deletions })))
+        return prevJson === nextJson ? prev : nextRepos
+      })
+    } catch { /* silent */ }
+  }, [])
+
   useEffect(() => {
     queueMicrotask(() => {
       void loadRepos()
     })
   }, [loadRepos])
 
+  // Reset worktree selection when the repo changes
   useEffect(() => {
-    if (selectedRepo?.path) {
+    setSelectedWorktreePath('')
+  }, [selectedRepoPath])
+
+  const diffPath = selectedWorktreePath || selectedRepo?.path || ''
+
+  useEffect(() => {
+    if (diffPath) {
       queueMicrotask(() => {
-        void loadRepoDiff(selectedRepo.path)
+        void loadRepoDiff(diffPath)
       })
     }
-  }, [loadRepoDiff, selectedRepo?.path])
+  }, [loadRepoDiff, diffPath])
+
+  // Real-time polling — diff every 2.5s, repo metadata every 5s
+  useEffect(() => {
+    if (!diffPath) return
+    const diffTimer = setInterval(() => { void pollDiff(diffPath) }, 2500)
+    const repoTimer = setInterval(() => { void pollRepos() }, 5000)
+    return () => { clearInterval(diffTimer); clearInterval(repoTimer) }
+  }, [diffPath, pollDiff, pollRepos])
 
   const addRepo = async () => {
     const path = repoPathInput.trim()
@@ -204,52 +267,59 @@ export default function App() {
   return (
     <main className="app-frame bg-[var(--bg)] text-[var(--text)]">
       <header className="app-header border-b border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
-        <div className="flex items-center gap-4 px-5 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-strong)]">
-              <GitCompareArrows size={18} className="text-[var(--blue)]" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold leading-tight">Git Worktree Diff</h1>
-              <p className="truncate text-xs text-[var(--text-dim)]">Local Git repository viewer</p>
-            </div>
+        <div className="flex items-center gap-2 px-4 py-2">
+          {/* Logo */}
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-strong)]">
+            <GitCompareArrows size={16} className="text-[var(--blue)]" />
           </div>
 
-          <div className="hidden items-center gap-2 text-xs text-[var(--text-dim)] md:flex">
-            <GitBranch size={14} />
-            <span>{selectedRepo?.name ?? 'No repo'}</span>
-            <ChevronRight size={13} />
-            <span className="font-medium text-[var(--text)]">{selectedRepo?.branch ?? 'not tracked'}</span>
-          </div>
+          <div className="w-px h-5 bg-[var(--border)] mx-1 shrink-0" />
 
-          <button
-            className="icon-button"
-            onClick={handleThemeToggle}
-            aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
-            title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
-          >
-            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-        </div>
-      </header>
-
-      <div className="workbench-shell">
-        <aside className="tool-rail tool-rail-left">
-          <RepositoryPanel
+          {/* Repo picker */}
+          <RepoPicker
             repos={repos}
             selectedRepo={selectedRepo}
             repoPathInput={repoPathInput}
             loadingRepos={loadingRepos}
-            loadingDiff={loadingDiff}
-            apiError={apiError}
-            onRepoPathInputChange={setRepoPathInput}
-            onAddRepo={() => void addRepo()}
-            onRefresh={() => void refreshSelectedRepo()}
-            onRemoveRepo={repoPath => void removeRepo(repoPath)}
-            onSelectRepo={setSelectedRepoPath}
-            onCheckoutBranch={(repoPath, branch) => void checkoutBranch(repoPath, branch)}
+            onSelect={setSelectedRepoPath}
+            onRemove={repoPath => void removeRepo(repoPath)}
+            onAdd={() => void addRepo()}
+            onPathInputChange={setRepoPathInput}
           />
 
+          {/* Branch / worktree picker */}
+          {selectedRepo && (
+            <>
+              <div className="w-px h-5 bg-[var(--border)] shrink-0" />
+              <BranchPicker
+                selectedRepo={selectedRepo}
+                selectedWorktreePath={selectedWorktreePath}
+                loadingDiff={loadingDiff}
+                onSelectWorktree={setSelectedWorktreePath}
+                onCheckoutBranch={(repoPath, branch) => void checkoutBranch(repoPath, branch)}
+              />
+            </>
+          )}
+
+          <div className="ml-auto flex items-center gap-2">
+            {apiError && (
+              <span className="text-[11px] text-[var(--red)] truncate max-w-xs">{apiError}</span>
+            )}
+            <button
+              className="icon-button"
+              onClick={handleThemeToggle}
+              aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+              title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="workbench-shell">
+        {/* Left sidebar: files + commit */}
+        <aside className="left-sidebar" style={{ width: sidebarWidth }}>
           <FilesPanel
             selectedRepo={selectedRepo}
             files={files}
@@ -262,9 +332,30 @@ export default function App() {
             onSelectFile={setSelectedPath}
             onToggleFile={path => setSelectedFilePaths(previous => toggleFilePath(previous, path))}
           />
+          <CommitPanel
+            selectedRepo={selectedRepo}
+            files={files}
+            selectedFiles={selectedFiles}
+            commitMessage={commitMessage}
+            operationLoading={operationLoading}
+            gitOutput={gitOutput}
+            onSelectAll={() => setSelectedFilePaths(new Set(allFilePaths))}
+            onClearSelection={() => setSelectedFilePaths(new Set())}
+            onRejectSelected={() => void rejectSelectedFiles()}
+            onCommitMessageChange={setCommitMessage}
+            onCommit={() => void runGitAction('commit')}
+          />
         </aside>
 
-        <div className="diff-stage">
+        {/* Resize handle */}
+        <div
+          ref={dragHandleRef}
+          className="resize-handle"
+          onMouseDown={startResize}
+        />
+
+        {/* Diff — takes all remaining space */}
+        <div className="diff-stage" style={{ flex: 1 }}>
           <DiffPane
             selectedRepo={selectedRepo}
             selectedFile={selectedFile}
@@ -273,29 +364,10 @@ export default function App() {
             emptyTitle={selectedRepo ? 'Working tree clean' : 'No repository selected'}
             emptyMessage={selectedRepo
               ? 'There are no unstaged or staged file changes to review in this repository.'
-              : 'Click the plus button in Repository to choose a local Git folder.'}
+              : 'Add a repository using the picker in the top bar.'}
             onDiffModeChange={setDiffMode}
           />
         </div>
-
-        <aside className="tool-rail tool-rail-right">
-          <GitActionsPanel
-            selectedRepo={selectedRepo}
-            files={files}
-            selectedFiles={selectedFiles}
-            commitMessage={commitMessage}
-            rebaseTarget={rebaseTarget}
-            rebaseBranch={rebaseBranch}
-            operationLoading={operationLoading}
-            gitOutput={gitOutput}
-            onSelectAll={() => setSelectedFilePaths(new Set(allFilePaths))}
-            onClearSelection={() => setSelectedFilePaths(new Set())}
-            onRejectSelected={() => void rejectSelectedFiles()}
-            onCommitMessageChange={setCommitMessage}
-            onRebaseBranchChange={setRebaseBranch}
-            onGitAction={(action, options) => void runGitAction(action, options)}
-          />
-        </aside>
       </div>
     </main>
   )

@@ -8,11 +8,12 @@ export async function summarizeRepo(repo) {
   const name = path.basename(repo.path)
 
   try {
-    const [branch, branches, status, numstat] = await Promise.all([
+    const [branch, branches, status, numstat, worktreeRaw] = await Promise.all([
       git(repo.path, ['branch', '--show-current']),
       git(repo.path, ['branch', '--format=%(refname:short)']),
       git(repo.path, ['status', '--short']),
       git(repo.path, ['diff', 'HEAD', '--numstat', '--']),
+      git(repo.path, ['worktree', 'list', '--porcelain']),
     ])
     const totals = parseNumstat(numstat)
 
@@ -21,6 +22,7 @@ export async function summarizeRepo(repo) {
       name,
       branch: branch || '(detached)',
       branches: branches.split('\n').filter(Boolean),
+      worktrees: parseWorktrees(worktreeRaw),
       changedFiles: countStatusLines(status),
       additions: totals.additions,
       deletions: totals.deletions,
@@ -31,6 +33,7 @@ export async function summarizeRepo(repo) {
       name,
       branch: 'unknown',
       branches: [],
+      worktrees: [],
       changedFiles: 0,
       additions: 0,
       deletions: 0,
@@ -46,8 +49,10 @@ export async function listRepoSummaries() {
 
 export async function upsertRepoPath(inputPath) {
   const repoPath = await normalizeRepoPath(inputPath)
-  const repos = await readRepos()
-  const next = await expandTrackedRepos([...repos.filter(repo => repo.path !== repoPath), { path: repoPath }])
+  const existing = await readRepos()
+  const base = [...existing.filter(repo => repo.path !== repoPath), { path: repoPath }]
+  await writeRepos(base)
+  const next = await expandTrackedRepos(base)
   return Promise.all(next.map(summarizeRepo))
 }
 
@@ -60,7 +65,20 @@ export async function removeRepoPath(repoPath) {
 
 export async function assertTracked(repoPath) {
   const repos = await expandTrackedRepos(await readRepos())
-  if (!repos.some(repo => repo.path === repoPath)) {
+  if (repos.some(repo => repo.path === repoPath)) return repos
+
+  // Also accept worktree paths of tracked repos
+  const worktreeLists = await Promise.all(
+    repos.map(async repo => {
+      try {
+        return parseWorktrees(await git(repo.path, ['worktree', 'list', '--porcelain']))
+      } catch {
+        return []
+      }
+    })
+  )
+  const allWorktreePaths = worktreeLists.flat().map(wt => wt.path)
+  if (!allWorktreePaths.includes(repoPath)) {
     throw httpError('Repository is not tracked', 404)
   }
   return repos
@@ -74,6 +92,21 @@ async function expandTrackedRepos(repos) {
   const next = nextPaths.map(repoPath => ({ path: repoPath }))
   if (changed) await writeRepos(next)
   return next
+}
+
+function parseWorktrees(raw) {
+  return raw.trim().split('\n\n').filter(Boolean).map(block => {
+    const entries = Object.fromEntries(
+      block.split('\n').filter(Boolean).map(line => {
+        const spaceIdx = line.indexOf(' ')
+        return [line.slice(0, spaceIdx), line.slice(spaceIdx + 1)]
+      })
+    )
+    return {
+      path: entries['worktree'],
+      branch: entries['branch']?.replace('refs/heads/', '') ?? '(detached)',
+    }
+  }).filter(wt => wt.path)
 }
 
 async function discoverAgentboardRepoPaths(repoPath) {

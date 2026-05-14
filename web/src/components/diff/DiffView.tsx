@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { MouseEvent, ReactElement } from 'react'
 import { ChevronDown, ChevronRight, ChevronsUpDown, FileCode, MessageSquare, Maximize2, X } from 'lucide-react'
 import { parseDiff, type ParsedDiff, type DiffLine } from '@/utils/parseDiff'
+import { getLanguage, highlightLine } from '@/lib/highlight'
 import { DiffBadge } from './DiffBadge'
 import type { ReviewComment } from '@/types/review'
 
@@ -26,10 +27,15 @@ interface DiffViewProps {
   getPersonaColor?: (name: string) => string
 }
 
+interface SplitCell {
+  content: string
+  lineNum?: number
+}
+
 interface SplitRow {
   kind: 'hunk' | 'pair' | 'context'
-  left?: string
-  right?: string
+  left?: SplitCell | null
+  right?: SplitCell | null
   content?: string
 }
 
@@ -105,13 +111,17 @@ function buildCollapsibleSections(lines: DiffLine[]): DiffSection[] {
 
 function buildSplitRows(parsed: ParsedDiff): SplitRow[] {
   const rows: SplitRow[] = []
-  const pendingDeletes: string[] = []
-  const pendingAdds: string[] = []
+  const pendingDeletes: SplitCell[] = []
+  const pendingAdds: SplitCell[] = []
 
   const flushPairs = () => {
     const length = Math.max(pendingDeletes.length, pendingAdds.length)
-    for (let index = 0; index < length; index += 1) {
-      rows.push({ kind: 'pair', left: pendingDeletes[index] ?? '', right: pendingAdds[index] ?? '' })
+    for (let index = 0; index < length; index++) {
+      rows.push({
+        kind: 'pair',
+        left: pendingDeletes[index] ?? null,
+        right: pendingAdds[index] ?? null,
+      })
     }
     pendingDeletes.length = 0
     pendingAdds.length = 0
@@ -119,12 +129,24 @@ function buildSplitRows(parsed: ParsedDiff): SplitRow[] {
 
   for (const line of parsed.lines) {
     if (line.type === 'file') continue
-    if (line.type === 'add') { pendingAdds.push(line.content); continue }
-    if (line.type === 'del') { pendingDeletes.push(line.content); continue }
+    if (line.type === 'add') {
+      pendingAdds.push({ content: line.content, lineNum: line.newLineNum })
+      continue
+    }
+    if (line.type === 'del') {
+      pendingDeletes.push({ content: line.content, lineNum: line.oldLineNum })
+      continue
+    }
     if (pendingDeletes.length || pendingAdds.length) flushPairs()
-    rows.push(line.type === 'hunk'
-      ? { kind: 'hunk', content: line.content }
-      : { kind: 'context', content: line.content })
+    if (line.type === 'hunk') {
+      rows.push({ kind: 'hunk', content: line.content })
+    } else {
+      rows.push({
+        kind: 'context',
+        left: { content: line.content, lineNum: line.oldLineNum },
+        right: { content: line.content, lineNum: line.newLineNum },
+      })
+    }
   }
 
   if (pendingDeletes.length || pendingAdds.length) flushPairs()
@@ -137,6 +159,7 @@ const DIFF_FONT = '"SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monos
 
 interface DiffLineRowProps {
   line: DiffLine
+  highlightedHtml?: string
   lineIndex?: number
   isSelected?: boolean
   author?: string
@@ -146,10 +169,10 @@ interface DiffLineRowProps {
   onGutterMouseEnter?: (lineIndex: number) => void
 }
 
-function DiffLineRow({ line, lineIndex, isSelected, author, authorColor, onClick, onGutterMouseDown, onGutterMouseEnter }: DiffLineRowProps) {
+function DiffLineRow({ line, highlightedHtml, lineIndex, isSelected, author, authorColor, onClick, onGutterMouseDown, onGutterMouseEnter }: DiffLineRowProps) {
   if (line.type === 'hunk') {
     return (
-      <div className="flex py-[2px] bg-[var(--blue)]/8 border-y border-[var(--border)]/30 select-none">
+      <div className="flex py-1 bg-[var(--blue)]/8 border-y border-[var(--border)]/30 select-none">
         {/* Gutter placeholder matching old+new columns */}
         <span className="w-9 shrink-0 border-r border-[var(--border)]/30" />
         <span className="w-9 shrink-0 border-r border-[var(--border)]/30" />
@@ -190,12 +213,12 @@ function DiffLineRow({ line, lineIndex, isSelected, author, authorColor, onClick
     : undefined
 
   return (
-    <div className={`flex items-start leading-5 ${rowBg}`}>
+    <div className={`flex items-stretch ${rowBg}`}>
       <span
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseEnter={handleMouseEnter}
-        className={`select-none text-right text-[var(--text-soft)] w-9 shrink-0 px-1.5 border-r border-[var(--border)]/30 text-[10px] leading-5 ${handleClick ? 'cursor-pointer hover:bg-[var(--blue)]/10' : ''}`}
+        className={`select-none text-right text-[var(--text-soft)] w-9 shrink-0 px-1.5 border-r border-[var(--border)]/30 text-[11px] py-[3px] ${handleClick ? 'cursor-pointer hover:bg-[var(--blue)]/10' : ''}`}
       >
         {isDel || line.type === 'ctx' ? line.oldLineNum ?? '' : ''}
       </span>
@@ -203,7 +226,7 @@ function DiffLineRow({ line, lineIndex, isSelected, author, authorColor, onClick
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseEnter={handleMouseEnter}
-        className={`select-none text-right text-[var(--text-soft)] w-9 shrink-0 px-1.5 border-r border-[var(--border)]/30 text-[10px] leading-5 ${handleClick ? 'cursor-pointer hover:bg-[var(--blue)]/10' : ''}`}
+        className={`select-none text-right text-[var(--text-soft)] w-9 shrink-0 px-1.5 border-r border-[var(--border)]/30 text-[11px] py-[3px] ${handleClick ? 'cursor-pointer hover:bg-[var(--blue)]/10' : ''}`}
       >
         {isAdd || line.type === 'ctx' ? line.newLineNum ?? '' : ''}
       </span>
@@ -215,8 +238,11 @@ function DiffLineRow({ line, lineIndex, isSelected, author, authorColor, onClick
       ) : author !== undefined ? (
         <span className="w-[70px] shrink-0 border-r border-[var(--border)]/30" />
       ) : null}
-      <span className={`${markerColor} select-none w-5 shrink-0 text-center text-[11px]`}>{marker}</span>
-      <span className="text-[var(--text)] whitespace-pre flex-1 pr-3 text-[11px]">{line.content}</span>
+      <span className={`${markerColor} select-none w-5 shrink-0 text-center text-[12px] py-[3px]`}>{marker}</span>
+      {highlightedHtml
+        ? <span className="whitespace-pre-wrap break-all pr-6 text-[12px] py-[3px] flex-1 min-w-0" dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+        : <span className="text-[var(--text)] whitespace-pre-wrap break-all pr-6 text-[12px] py-[3px] flex-1 min-w-0">{line.content}</span>
+      }
     </div>
   )
 }
@@ -295,10 +321,21 @@ export function DiffView({
   if (!parsed) return null
 
   const displayFile = fileProp || parsed.file
+  const language = getLanguage(displayFile)
+
+  const highlightMap = useMemo(() => {
+    const map = new Map<DiffLine, string>()
+    for (const line of parsed.lines) {
+      if (line.type !== 'file' && line.type !== 'hunk') {
+        map.set(line, highlightLine(line.content, language))
+      }
+    }
+    return map
+  }, [parsed, language])
 
   return (
     <>
-      <div className={`rounded-md border border-[var(--border)] overflow-hidden font-mono text-[11px] ${className}`} style={{ fontFamily: DIFF_FONT }}>
+      <div className={`rounded-md border border-[var(--border)] overflow-hidden font-mono text-[12px] ${className}`} style={{ fontFamily: DIFF_FONT }}>
         {/* Header */}
         <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] border-b border-[var(--border)]/60">
           <button
@@ -335,33 +372,56 @@ export function DiffView({
         {/* Diff body */}
         {expanded && (
           mode === 'split' ? (
-            <div className="diff-scroll-body bg-[var(--bg)]">
+            <div className="diff-scroll-body bg-[var(--bg)]" style={{ overflowX: 'auto' }}>
               {splitRows.map((row, index) => {
-                if (row.kind === 'hunk') {
+                  if (row.kind === 'hunk') {
+                    return (
+                      <div
+                        key={`hunk-${index}`}
+                        className="flex px-4 py-1 bg-[var(--blue)]/8 text-[var(--blue)] text-[11px] select-none border-b border-[var(--border)]/40"
+                      >
+                        {row.content}
+                      </div>
+                    )
+                  }
+
+                  const isCtx = row.kind === 'context'
+
+                  const renderSide = (
+                    cell: SplitCell | null | undefined,
+                    side: 'left' | 'right',
+                    borderClass: string,
+                  ) => {
+                    const isAdd = !isCtx && side === 'right'
+                    const isDel = !isCtx && side === 'left'
+                    const bg = cell == null
+                      ? ''
+                      : isAdd ? 'bg-[var(--green)]/[0.12]' : isDel ? 'bg-[var(--red)]/[0.12]' : ''
+                    const markerColor = isAdd ? 'text-[var(--green)]' : isDel ? 'text-[var(--red)]' : 'text-transparent'
+                    const marker = isAdd ? '+' : isDel ? '-' : ' '
+                    return (
+                      <div className={`flex items-start flex-1 min-w-0 ${bg} ${borderClass}`}>
+                        <span className="select-none text-right text-[var(--text-soft)] w-10 shrink-0 px-1.5 border-r border-[var(--border)]/30 text-[11px] py-[3px] flex items-center justify-end">
+                          {cell?.lineNum ?? ''}
+                        </span>
+                        <span className={`${markerColor} select-none w-5 shrink-0 text-center text-[12px] py-[3px] flex items-center justify-center`}>
+                          {cell == null ? '' : marker}
+                        </span>
+                        {cell?.content != null
+                          ? <span className="whitespace-pre-wrap break-all text-[12px] py-[3px] pr-4 flex-1 min-w-0" dangerouslySetInnerHTML={{ __html: highlightLine(cell.content, language) }} />
+                          : <span className="text-[12px] py-[3px] flex-1 min-w-0" />
+                        }
+                      </div>
+                    )
+                  }
+
                   return (
-                    <div
-                      key={`hunk-${index}`}
-                      className="px-3 py-[2px] bg-[var(--blue)]/8 text-[var(--blue)] text-[10px] select-none border-b border-[var(--border)]/40"
-                    >
-                      {row.content}
+                    <div key={`${row.kind}-${index}`} className="flex border-b border-[var(--border)]/40" style={{ minWidth: '100%' }}>
+                      {renderSide(row.left, 'left', 'border-r border-[var(--border)]/40')}
+                      {renderSide(row.right, 'right', '')}
                     </div>
                   )
-                }
-                if (row.kind === 'context') {
-                  return (
-                    <div key={`ctx-${index}`} className="grid grid-cols-2 border-b border-[var(--border)]/40">
-                      <div className="border-r border-[var(--border)]/40 px-3 py-[2px] text-[var(--text-dim)] whitespace-pre-wrap break-all">{row.content}</div>
-                      <div className="px-3 py-[2px] text-[var(--text-dim)] whitespace-pre-wrap break-all">{row.content}</div>
-                    </div>
-                  )
-                }
-                return (
-                  <div key={`pair-${index}`} className="grid grid-cols-2 border-b border-[var(--border)]/40">
-                    <div className="border-r border-[var(--border)]/40 bg-[var(--red)]/[0.12] px-3 py-[2px] text-[var(--text)] whitespace-pre-wrap break-all">{row.left}</div>
-                    <div className="bg-[var(--green)]/[0.12] px-3 py-[2px] text-[var(--text)] whitespace-pre-wrap break-all">{row.right}</div>
-                  </div>
-                )
-              })}
+                })}
             </div>
           ) : (
             <div className="diff-scroll-body bg-[var(--bg)]">
@@ -373,7 +433,7 @@ export function DiffView({
                     if (expandedSections.has(section.id)) {
                       return section.lines.map((line, li) => {
                         const idx = globalIdx++
-                        return <DiffLineRow key={`${si}-${li}`} line={line} lineIndex={idx} />
+                        return <DiffLineRow key={`${si}-${li}`} line={line} highlightedHtml={highlightMap.get(line)} lineIndex={idx} />
                       })
                     }
                     globalIdx += section.lines.length
@@ -404,6 +464,7 @@ export function DiffView({
                       <DiffLineRow
                         key={`${si}-${li}`}
                         line={line}
+                        highlightedHtml={highlightMap.get(line)}
                         lineIndex={idx}
                         isSelected={isSel}
                         author={hasAuthors ? (author || '') : undefined}
@@ -485,7 +546,7 @@ export function DiffView({
             <div className="overflow-auto flex-1 font-mono text-[11px] bg-[var(--bg)]" style={{ fontFamily: DIFF_FONT }}>
               {parsed.lines
                 .filter(l => l.type !== 'file')
-                .map((line, i) => <DiffLineRow key={i} line={line} />)}
+                .map((line, i) => <DiffLineRow key={i} line={line} highlightedHtml={highlightMap.get(line)} />)}
             </div>
           </div>
         </div>

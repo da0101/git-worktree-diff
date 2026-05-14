@@ -10,11 +10,17 @@ export interface FileDiff {
   status: 'modified' | 'added' | 'deleted'
 }
 
+export interface WorktreeSummary {
+  path: string
+  branch: string
+}
+
 export interface RepoSummary {
   path: string
   name: string
   branch: string
   branches: string[]
+  worktrees: WorktreeSummary[]
   changedFiles: number
   additions: number
   deletions: number

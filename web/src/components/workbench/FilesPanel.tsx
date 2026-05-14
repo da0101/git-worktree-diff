@@ -1,4 +1,4 @@
-import { PanelLeft, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { DiffBadge } from '@/components/diff'
 import { statusClass, statusLabel } from '@/lib/diffFiles'
 import type { FileDiff, RepoSummary } from '@/types/git'
@@ -29,38 +29,31 @@ export function FilesPanel({
   onToggleFile,
 }: FilesPanelProps) {
   return (
-    <section className="panel">
-      <div className="panel-title">
-        <PanelLeft size={15} />
-        Files
+    <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="field-label">Changes</span>
+        {selectedRepo && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-[var(--green)]">+{totals.additions}</span>
+            <span className="text-[var(--red)]">-{totals.deletions}</span>
+            <span className="text-[var(--text-soft)]">{files.length} files</span>
+          </div>
+        )}
       </div>
+
       {selectedRepo ? (
         <>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="metric">
-              <span>{files.length}</span>
-              <small>files</small>
-            </div>
-            <div className="metric text-[var(--green)]">
-              <span>+{totals.additions}</span>
-              <small>added</small>
-            </div>
-            <div className="metric text-[var(--red)]">
-              <span>-{totals.deletions}</span>
-              <small>deleted</small>
-            </div>
-          </div>
-
-          <label className="search-box mt-3">
-            <Search size={14} />
+          <label className="search-box mb-2">
+            <Search size={13} />
             <input
               value={query}
-              onChange={event => onQueryChange(event.target.value)}
+              onChange={e => onQueryChange(e.target.value)}
               placeholder="Filter files"
             />
           </label>
 
-          <div className="mt-3 max-h-[42vh] space-y-1 overflow-auto pr-1 lg:max-h-[calc(100vh-310px)]">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-px pr-0.5">
             {filteredFiles.map(file => (
               <div
                 key={file.id}
@@ -70,11 +63,8 @@ export function FilesPanel({
                 <input
                   type="checkbox"
                   checked={selectedFilePaths.has(file.path)}
-                  onChange={event => {
-                    event.stopPropagation()
-                    onToggleFile(file.path)
-                  }}
-                  onClick={event => event.stopPropagation()}
+                  onChange={e => { e.stopPropagation(); onToggleFile(file.path) }}
+                  onClick={e => e.stopPropagation()}
                   aria-label={`Select ${file.path}`}
                 />
                 <span className={`status-pill ${statusClass(file.status)}`}>{statusLabel(file.status)}</span>
@@ -84,16 +74,18 @@ export function FilesPanel({
             ))}
             {filteredFiles.length === 0 && (
               <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--text-dim)]">
-                {files.length === 0 ? 'No changed files in this repository.' : 'No files match this filter.'}
+                {files.length === 0 ? 'No changed files.' : 'No files match this filter.'}
               </p>
             )}
           </div>
         </>
       ) : (
-        <div className="mt-3 rounded-md border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--text-dim)]">
-          Choose a repository to see changed files.
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-xs text-[var(--text-dim)] text-center px-4">
+            Open a repository to see changed files.
+          </p>
         </div>
       )}
-    </section>
+    </div>
   )
 }
