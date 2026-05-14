@@ -22,7 +22,7 @@ export function DiffPane({
   onDiffModeChange,
 }: DiffPaneProps) {
   return (
-    <section className="diff-pane min-w-0 space-y-3">
+    <section className="diff-pane min-w-0">
       <div className="panel flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="panel-title">
@@ -61,7 +61,7 @@ export function DiffPane({
           file={selectedFile.path}
           mode={diffMode}
           defaultExpanded
-          className="diff-panel"
+          className="diff-panel min-h-0"
         />
       ) : (
         <div className="empty-state">
