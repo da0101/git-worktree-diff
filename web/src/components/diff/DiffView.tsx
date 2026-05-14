@@ -318,13 +318,12 @@ export function DiffView({
     setExpandedSections(new Set(ids))
   }, [sections])
 
-  if (!parsed) return null
-
-  const displayFile = fileProp || parsed.file
+  const displayFile = fileProp || parsed?.file || ''
   const language = getLanguage(displayFile)
 
   const highlightMap = useMemo(() => {
     const map = new Map<DiffLine, string>()
+    if (!parsed) return map
     for (const line of parsed.lines) {
       if (line.type !== 'file' && line.type !== 'hunk') {
         map.set(line, highlightLine(line.content, language))
@@ -332,6 +331,8 @@ export function DiffView({
     }
     return map
   }, [parsed, language])
+
+  if (!parsed) return null
 
   return (
     <>

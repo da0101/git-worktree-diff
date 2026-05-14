@@ -6,6 +6,9 @@
 | Stream | Type | Status | Agent | Last updated |
 |---|---|---|---|---|
 | diff-visibility-project-repos | bugfix | awaiting-verification | codex | 2026-05-14 |
+| vscode-extension-workbench | feature | awaiting-verification | codex | 2026-05-14 |
+| vscode-native-sidebar | feature | awaiting-verification | codex | 2026-05-14 |
+| vscode-agent-handoff | feature | awaiting-verification | codex | 2026-05-14 |
 
 ---
 

@@ -15,7 +15,6 @@ export default function App() {
   const [selectedRepoPath, setSelectedRepoPath] = useLocalStorageState('git-viewer-selected-repo', '')
   const [repoPathInput, setRepoPathInput] = useLocalStorageState('git-viewer-repo-path-input', '')
   const [commitMessage, setCommitMessage] = useLocalStorageState('git-viewer-commit-message', '')
-  const [rebaseBranch, setRebaseBranch] = useLocalStorageState('git-viewer-rebase-branch', '')
 
   const [sidebarWidth, setSidebarWidth] = useLocalStorageState('git-viewer-sidebar-width', 280)
   const isDragging = useRef(false)
@@ -124,7 +123,7 @@ export default function App() {
   // Reset worktree selection when the repo changes
   useEffect(() => {
     setSelectedWorktreePath('')
-  }, [selectedRepoPath])
+  }, [selectedRepoPath, setSelectedWorktreePath])
 
   const diffPath = selectedWorktreePath || selectedRepo?.path || ''
 
@@ -197,12 +196,6 @@ export default function App() {
     }
   }
 
-  const refreshSelectedRepo = async () => {
-    if (!selectedRepo?.path) return
-    await loadRepos()
-    await loadRepoDiff(selectedRepo.path)
-  }
-
   const runGitAction = async (action: string, options: { files?: string[]; message?: string; branch?: string } = {}) => {
     if (!selectedRepo) return
 
@@ -255,7 +248,6 @@ export default function App() {
     }),
     { additions: 0, deletions: 0 },
   ), [files])
-  const rebaseTarget = useMemo(() => pickRebaseTarget(selectedRepo, rebaseBranch), [rebaseBranch, selectedRepo])
 
   const handleThemeToggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -294,7 +286,6 @@ export default function App() {
               <BranchPicker
                 selectedRepo={selectedRepo}
                 selectedWorktreePath={selectedWorktreePath}
-                loadingDiff={loadingDiff}
                 onSelectWorktree={setSelectedWorktreePath}
                 onCheckoutBranch={(repoPath, branch) => void checkoutBranch(repoPath, branch)}
               />
@@ -392,16 +383,6 @@ function pickSelectedRepoPath(current: string, repos: RepoSummary[]) {
   const stored = window.localStorage.getItem('git-viewer-selected-repo')
   if (stored && repos.some(repo => repo.path === stored)) return stored
   return repos[0]?.path ?? ''
-}
-
-function pickRebaseTarget(selectedRepo: RepoSummary | null, rebaseBranch: string) {
-  if (!selectedRepo) return ''
-  if (rebaseBranch && selectedRepo.branches.includes(rebaseBranch) && rebaseBranch !== selectedRepo.branch) {
-    return rebaseBranch
-  }
-  return selectedRepo.branches.find(branch => ['develop', 'development', 'master', 'main'].includes(branch) && branch !== selectedRepo.branch)
-    ?? selectedRepo.branches.find(branch => branch !== selectedRepo.branch)
-    ?? ''
 }
 
 function toggleFilePath(previous: Set<string>, path: string) {

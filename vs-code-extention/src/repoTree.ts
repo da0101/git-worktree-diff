@@ -1,0 +1,258 @@
+import * as vscode from 'vscode'
+import { treeDecorationScheme } from './fileDecorations'
+import { listChangedFiles, listRepos } from './gitApi'
+import type { FileDiffSummary, RepoSummary, RepoTarget, WorkbenchSelection, WorktreeSummary } from './types'
+
+export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
+  private readonly changed = new vscode.EventEmitter<RepoTreeItem | undefined | null | void>()
+  readonly onDidChangeTreeData = this.changed.event
+  private readonly selectionChanged = new vscode.EventEmitter<SelectionSummary>()
+  readonly onDidChangeSelection = this.selectionChanged.event
+
+  private repos: RepoSummary[] = []
+  private filesByPath = new Map<string, FileDiffSummary[]>()
+  private selectedFiles = new Map<string, WorkbenchSelection>()
+
+  refresh() {
+    this.filesByPath.clear()
+    this.pruneSelection()
+    this.changed.fire()
+    this.emitSelectionChanged()
+  }
+
+  getTreeItem(element: RepoTreeItem): vscode.TreeItem {
+    return element
+  }
+
+  async getChildren(element?: RepoTreeItem): Promise<RepoTreeItem[]> {
+    if (!element) {
+      this.repos = await listRepos()
+      return this.repos.map(repo => new RepoItem(repo))
+    }
+
+    if (element instanceof RepoItem) {
+      const worktrees = normalizeWorktrees(element.repo)
+      if (worktrees.length > 1) {
+        return worktrees.map(worktree => new WorktreeItem(element.repo, worktree))
+      }
+      return this.getFileItems(element.repo.path, { repoPath: element.repo.path })
+    }
+
+    if (element instanceof WorktreeItem) {
+      return this.getFileItems(element.worktree.path, {
+        repoPath: element.repo.path,
+        worktreePath: element.worktree.path,
+      })
+    }
+
+    return []
+  }
+
+  private async getFileItems(diffPath: string, selection: WorkbenchSelection) {
+    const files = await this.getChangedFilesForPath(diffPath)
+
+    return files.map(file => new FileItem(file, {
+      ...selection,
+      filePath: file.path,
+      fileStatus: file.status,
+    }, this.isSelected({
+      ...selection,
+      filePath: file.path,
+      fileStatus: file.status,
+    })))
+  }
+
+  async getChangedFilesForPath(repoPath: string) {
+    const cached = this.filesByPath.get(repoPath)
+    const files = cached ?? await listChangedFiles(repoPath)
+    if (!cached) this.filesByPath.set(repoPath, files)
+    return files
+  }
+
+  setFileSelected(selection: WorkbenchSelection, checked: boolean) {
+    if (!selection.filePath) return
+    const key = selectionKey(selection)
+    if (checked) this.selectedFiles.set(key, selection)
+    else this.selectedFiles.delete(key)
+    this.changed.fire()
+    this.emitSelectionChanged()
+  }
+
+  async selectAll(target?: RepoTarget) {
+    const repos = this.repos.length > 0 ? this.repos : await listRepos()
+    const targets = target ? [target] : repos.flatMap(repo => normalizeWorktrees(repo).map(worktree => ({
+      repoPath: repo.path,
+      worktreePath: worktree.path,
+    })))
+
+    for (const selectionTarget of targets) {
+      const repoPath = selectionTarget.worktreePath || selectionTarget.repoPath
+      const files = await this.getChangedFilesForPath(repoPath)
+      for (const file of files) {
+        const selection = {
+          repoPath: selectionTarget.repoPath,
+          worktreePath: selectionTarget.worktreePath,
+          filePath: file.path,
+          fileStatus: file.status,
+        }
+        this.selectedFiles.set(selectionKey(selection), selection)
+      }
+    }
+
+    this.changed.fire()
+    this.emitSelectionChanged()
+  }
+
+  clearSelection() {
+    this.selectedFiles.clear()
+    this.changed.fire()
+    this.emitSelectionChanged()
+  }
+
+  getSelectedFiles() {
+    return [...this.selectedFiles.values()]
+  }
+
+  getSelectionSummary(): SelectionSummary {
+    const files = this.getSelectedFiles()
+    return {
+      selectedFiles: files.length,
+      repositories: new Set(files.map(file => file.worktreePath || file.repoPath)).size,
+    }
+  }
+
+  getBranchesForTarget(target?: RepoTarget) {
+    if (!target) return []
+    const repo = this.repos.find(repo => repo.path === target.repoPath)
+    if (!repo) return []
+    const activeBranch = target.worktreePath
+      ? repo.worktrees.find(worktree => worktree.path === target.worktreePath)?.branch
+      : repo.branch
+    return repo.branches.filter(branch => branch !== activeBranch)
+  }
+
+  private isSelected(selection: WorkbenchSelection) {
+    return this.selectedFiles.has(selectionKey(selection))
+  }
+
+  private pruneSelection() {
+    const knownDiffPaths = new Set(this.filesByPath.keys())
+    if (knownDiffPaths.size === 0) return
+
+    for (const [key, selection] of this.selectedFiles) {
+      const repoPath = selection.worktreePath || selection.repoPath
+      const files = this.filesByPath.get(repoPath)
+      if (files && !files.some(file => file.path === selection.filePath)) {
+        this.selectedFiles.delete(key)
+      }
+    }
+  }
+
+  private emitSelectionChanged() {
+    this.selectionChanged.fire(this.getSelectionSummary())
+  }
+}
+
+export type RepoTreeItem = RepoItem | WorktreeItem | FileItem
+
+export class RepoItem extends vscode.TreeItem {
+  readonly target: RepoTarget
+
+  constructor(readonly repo: RepoSummary) {
+    super(repo.name, vscode.TreeItemCollapsibleState.Collapsed)
+    this.target = { repoPath: repo.path }
+    this.id = `repo:${repo.path}`
+    this.description = repo.changedFiles > 0 ? `${repo.branch}  ${repo.changedFiles}` : repo.branch
+    this.tooltip = `${repo.path}\n${repo.changedFiles} changed files`
+    this.iconPath = new vscode.ThemeIcon('repo')
+    this.resourceUri = vscode.Uri.file(repo.path)
+    this.contextValue = 'repo'
+  }
+}
+
+export class WorktreeItem extends vscode.TreeItem {
+  readonly target: RepoTarget
+
+  constructor(readonly repo: RepoSummary, readonly worktree: WorktreeSummary) {
+    super(worktree.branch || 'detached', vscode.TreeItemCollapsibleState.Collapsed)
+    this.target = { repoPath: repo.path, worktreePath: worktree.path }
+    this.id = `worktree:${repo.path}:${worktree.path}`
+    this.description = baseName(worktree.path)
+    this.tooltip = worktree.path
+    this.iconPath = new vscode.ThemeIcon('git-branch')
+    this.resourceUri = vscode.Uri.file(worktree.path)
+    this.contextValue = 'worktree'
+  }
+}
+
+export class FileItem extends vscode.TreeItem {
+  constructor(readonly file: FileDiffSummary, readonly selection: WorkbenchSelection, selected: boolean) {
+    super(file.path, vscode.TreeItemCollapsibleState.None)
+    this.id = `file:${selection.repoPath}:${selection.worktreePath ?? ''}:${file.path}`
+    this.description = `${statusLabel(file.status)}  +${file.additions} -${file.deletions}`
+    this.tooltip = `${statusTitle(file.status)}\n${file.path}\n+${file.additions} -${file.deletions}`
+    this.iconPath = new vscode.ThemeIcon(statusIcon(file.status), statusColor(file.status))
+    this.resourceUri = decoratedFileUri(selection, file)
+    this.contextValue = `file-${file.status}`
+    this.checkboxState = {
+      state: selected ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked,
+      tooltip: selected ? 'Selected for Git actions' : 'Select for Git actions',
+    }
+    this.command = {
+      command: 'gitWorktreeDiff.openNativeDiff',
+      title: 'Open Native Diff',
+      arguments: [selection],
+    }
+  }
+}
+
+function normalizeWorktrees(repo: RepoSummary) {
+  if (repo.worktrees.length > 0) return repo.worktrees
+  return [{ path: repo.path, branch: repo.branch }]
+}
+
+function statusIcon(status: FileDiffSummary['status']) {
+  if (status === 'added') return 'diff-added'
+  if (status === 'deleted') return 'diff-removed'
+  return 'diff-modified'
+}
+
+function statusColor(status: FileDiffSummary['status']) {
+  if (status === 'added') return new vscode.ThemeColor('gitDecoration.addedResourceForeground')
+  if (status === 'deleted') return new vscode.ThemeColor('gitDecoration.deletedResourceForeground')
+  return new vscode.ThemeColor('gitDecoration.modifiedResourceForeground')
+}
+
+function statusLabel(status: FileDiffSummary['status']) {
+  if (status === 'added') return 'A'
+  if (status === 'deleted') return 'D'
+  return 'M'
+}
+
+function statusTitle(status: FileDiffSummary['status']) {
+  if (status === 'added') return 'Added file'
+  if (status === 'deleted') return 'Deleted file'
+  return 'Modified file'
+}
+
+function decoratedFileUri(selection: WorkbenchSelection, file: FileDiffSummary) {
+  const basePath = selection.worktreePath || selection.repoPath
+  return vscode.Uri.from({
+    scheme: treeDecorationScheme,
+    path: `/${encodeURIComponent(`${basePath}/${file.path}`)}`,
+    query: `status=${encodeURIComponent(file.status)}`,
+  })
+}
+
+function baseName(value: string) {
+  return value.split('/').filter(Boolean).pop() ?? value
+}
+
+function selectionKey(selection: WorkbenchSelection) {
+  return `${selection.repoPath}\0${selection.worktreePath ?? ''}\0${selection.filePath ?? ''}`
+}
+
+export type SelectionSummary = {
+  selectedFiles: number
+  repositories: number
+}

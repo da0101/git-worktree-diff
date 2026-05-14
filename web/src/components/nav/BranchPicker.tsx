@@ -5,7 +5,6 @@ import type { RepoSummary } from '@/types/git'
 interface BranchPickerProps {
   selectedRepo: RepoSummary | null
   selectedWorktreePath: string
-  loadingDiff: boolean
   onSelectWorktree: (path: string) => void
   onCheckoutBranch: (repoPath: string, branch: string) => void
 }
@@ -13,7 +12,6 @@ interface BranchPickerProps {
 export function BranchPicker({
   selectedRepo,
   selectedWorktreePath,
-  loadingDiff,
   onSelectWorktree,
   onCheckoutBranch,
 }: BranchPickerProps) {
