@@ -9,7 +9,7 @@ repo_ids: [git-worktree-diff]
 base_branch: feature/vscode-extension-workbench
 git_branch: feature/vscode-extension-workbench
 created_at: 2026-05-14
-updated_at: 2026-05-14
+updated_at: 2026-05-15
 closure_approved: false
 ---
 
@@ -48,23 +48,34 @@ closure_approved: false
 | git-worktree-diff | `/private/tmp/git-worktree-diff-vscode-extension-workbench` | `feature/vscode-extension-workbench` | stacked on uncommitted extension stream | `web/npm install` and root `npm install` completed | Backend: `cd backend && npm start`; Extension: open folder in VS Code and run `Run Extension` | Backend `8420` |
 
 ## Resume state
+_Overwritten by `ab checkpoint` — the compact payload the next agent reads first. Keep this block under ~10 lines._
 
-- **Last updated:** 2026-05-14 by codex
-- **What just happened:** Corrected the target from React wrapper to native replacement: `vs-code-extention/` now reads the repo store and runs Git directly, with native repo/branch/commit/file commands.
-- **Current focus:** Await manual Extension Development Host verification of the fully native workflow.
-- **Next action:** Reload/restart the Extension Development Host, expand Worktrees, click a changed file, verify native diff opens, and test safe stage/unstage plus branch checkout/commit prompts.
+- **Last updated:** 2026-05-15 by danilulmashev
+- **What just happened:** Added a dynamic inline Ask Agent CodeLens above non-empty editor selections so the quick ask flow is visible near selected diff/editor code.
+- **Current focus:** —
+- **Next action:** Reload/restart the Extension Development Host, select code in a diff/editor, verify an inline Ask Agent CodeLens appears above the selection, click it, enter a question, choose terminal, and verify send.
 - **Blockers:** none
 
 ## Progress log
 
+2026-05-15 13:45 — Added a dynamic inline Ask Agent CodeLens above non-empty editor selections so the quick ask flow is visible near selected diff/editor code.
+
+2026-05-15 13:43 — Added modal confirmations for commit selected files and push actions so serious Git actions require explicit approval before execution.
+
+2026-05-15 13:41 — Added an editor selection Ask Agent quick flow via the VS Code lightbulb/context menu: prompt for question, choose terminal, and send immediately without sidebar draft state.
+
+2026-05-15 12:51 — Fixed duplicate agent terminals by using per-terminal ids instead of raw names, labels duplicate Codex terminals distinctly, and added automatic Actions view terminal refresh every 2.5s.
+
+2026-05-15 12:46 — Added agent terminal detection so VS Code terminal process labels like node can display as Codex/Claude/Gemini when the terminal process tree exposes the agent CLI.
+
+2026-05-15 12:41 — Fixed Agent tab terminal dropdown cleanup, multi-file selected context sends, visible Agent clear action, and automatic selection/draft clearing after a successful send.
+
+2026-05-15 12:31 — Corrected the Actions panel branch dropdown so it includes and selects the current main-repo branch; checkout only enables after choosing a different branch.
+
+2026-05-15 12:23 — Added repo-only branch checkout in the native Actions panel and locked linked worktrees out of checkout while preserving file/Git actions.
+
 2026-05-14 00:00 — Stream created for native-feeling VS Code Activity Bar/sidebar integration.
 2026-05-14 00:00 — Implemented Activity Bar/sidebar contributions and compact sidebar webview provider backed by `/api/repos`.
-2026-05-14 00:00 — Verified `npm run build`, `npm run test:web`, and `npm run lint:web`.
-2026-05-14 00:00 — Added clickable sidebar repo/worktree navigation into the full React workbench and reverified build/test/lint.
-2026-05-14 00:00 — Created sibling `vs-code-extention/`, moved the native extension source there, added API/types/TreeView modules, and replaced the placeholder icon with a custom worktree-diff SVG.
-2026-05-14 00:00 — Added native diff editor support via virtual HEAD content and file context actions for stage, unstage, and discard; build/test/lint pass.
-2026-05-14 00:00 — Removed backend HTTP and React workbench dependency from the extension workflow; native extension now reads `~/.git-worktree-diff/repos.json` and executes Git directly.
-
 ## Open questions
 
 _None._
