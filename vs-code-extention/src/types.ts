@@ -10,12 +10,18 @@ export type WorkbenchSelection = {
 export interface WorktreeSummary {
   path: string
   branch: string
+  upstream?: string
+  ahead?: number
+  behind?: number
 }
 
 export interface RepoSummary {
   path: string
   name: string
   branch: string
+  upstream?: string
+  ahead?: number
+  behind?: number
   branches: string[]
   worktrees: WorktreeSummary[]
   changedFiles: number

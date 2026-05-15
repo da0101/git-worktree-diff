@@ -182,8 +182,8 @@ export class RepoItem extends vscode.TreeItem {
     super(repo.name, vscode.TreeItemCollapsibleState.Collapsed)
     this.target = { repoPath: repo.path }
     this.id = `repo:${repo.path}`
-    this.description = repo.changedFiles > 0 ? `${repo.branch}  ${repo.changedFiles}` : repo.branch
-    this.tooltip = `${repo.path}\n${repo.changedFiles} changed files`
+    this.description = [repo.branch, syncLabel(repo), repo.changedFiles > 0 ? String(repo.changedFiles) : ''].filter(Boolean).join('  ')
+    this.tooltip = repoTooltip(repo)
     this.iconPath = new vscode.ThemeIcon('repo')
     this.resourceUri = vscode.Uri.file(repo.path)
     this.contextValue = 'repo'
@@ -197,8 +197,8 @@ export class WorktreeItem extends vscode.TreeItem {
     super(worktree.branch || 'detached', vscode.TreeItemCollapsibleState.Collapsed)
     this.target = { repoPath: repo.path, worktreePath: worktree.path }
     this.id = `worktree:${repo.path}:${worktree.path}`
-    this.description = baseName(worktree.path)
-    this.tooltip = worktree.path
+    this.description = [baseName(worktree.path), syncLabel(worktree)].filter(Boolean).join('  ')
+    this.tooltip = worktreeTooltip(worktree)
     this.iconPath = new vscode.ThemeIcon('git-branch')
     this.resourceUri = vscode.Uri.file(worktree.path)
     this.contextValue = worktree.path === repo.path ? 'main-worktree' : 'worktree'
@@ -290,6 +290,37 @@ function decoratedFileUri(selection: WorkbenchSelection, file: FileDiffSummary) 
 
 function baseName(value: string) {
   return value.split('/').filter(Boolean).pop() ?? value
+}
+
+function syncLabel(target: { ahead?: number; behind?: number }) {
+  const parts = []
+  if (target.ahead) parts.push(`↑${target.ahead}`)
+  if (target.behind) parts.push(`↓${target.behind}`)
+  return parts.join(' ')
+}
+
+function repoTooltip(repo: RepoSummary) {
+  return [
+    repo.path,
+    `${repo.changedFiles} changed files`,
+    repo.upstream ? `Upstream: ${repo.upstream}` : 'No upstream branch',
+    syncTooltip(repo),
+  ].filter(Boolean).join('\n')
+}
+
+function worktreeTooltip(worktree: WorktreeSummary) {
+  return [
+    worktree.path,
+    worktree.upstream ? `Upstream: ${worktree.upstream}` : '',
+    syncTooltip(worktree),
+  ].filter(Boolean).join('\n')
+}
+
+function syncTooltip(target: { ahead?: number; behind?: number }) {
+  const ahead = target.ahead ?? 0
+  const behind = target.behind ?? 0
+  if (ahead === 0 && behind === 0) return ''
+  return `${ahead} commit${ahead === 1 ? '' : 's'} to push, ${behind} commit${behind === 1 ? '' : 's'} to pull`
 }
 
 function selectionKey(selection: WorkbenchSelection) {

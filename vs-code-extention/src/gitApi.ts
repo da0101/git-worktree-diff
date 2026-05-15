@@ -170,13 +170,18 @@ async function summarizeRepo(repo: { path: string }): Promise<RepoSummary> {
       git(repo.path, ['worktree', 'list', '--porcelain']),
     ])
     const totals = parseNumstat(numstat)
+    const branchStatus = parseStatusBranch(status)
+    const worktrees = await summarizeWorktrees(parseWorktrees(worktreeRaw))
 
     return {
       ...repo,
       name,
-      branch: branch || '(detached)',
+      branch: branchStatus.branch || branch || '(detached)',
+      upstream: branchStatus.upstream,
+      ahead: branchStatus.ahead,
+      behind: branchStatus.behind,
       branches,
-      worktrees: parseWorktrees(worktreeRaw),
+      worktrees,
       changedFiles: parseStatusChangedFiles(status, numstat).length,
       additions: totals.additions,
       deletions: totals.deletions,
@@ -186,6 +191,8 @@ async function summarizeRepo(repo: { path: string }): Promise<RepoSummary> {
       ...repo,
       name,
       branch: 'unknown',
+      ahead: 0,
+      behind: 0,
       branches: [],
       worktrees: [],
       changedFiles: 0,
@@ -315,6 +322,36 @@ export function parseStatusChangedFiles(status: string, numstat: string): FileDi
   }
 
   return [...files.values()]
+}
+
+export function parseStatusBranch(status: string): Pick<RepoSummary, 'branch' | 'upstream' | 'ahead' | 'behind'> {
+  const result: Pick<RepoSummary, 'branch' | 'upstream' | 'ahead' | 'behind'> = {
+    branch: '(detached)',
+    ahead: 0,
+    behind: 0,
+  }
+
+  for (const token of status.split('\0').filter(Boolean)) {
+    if (!token.startsWith('# ')) continue
+    const value = token.slice(2)
+    const headMatch = /^branch\.head (.+)$/.exec(value)
+    if (headMatch) {
+      result.branch = headMatch[1] === '(detached)' ? '(detached)' : headMatch[1]
+      continue
+    }
+    const upstreamMatch = /^branch\.upstream (.+)$/.exec(value)
+    if (upstreamMatch) {
+      result.upstream = upstreamMatch[1]
+      continue
+    }
+    const aheadBehindMatch = /^branch\.ab \+(\d+) -(\d+)$/.exec(value)
+    if (aheadBehindMatch) {
+      result.ahead = Number(aheadBehindMatch[1]) || 0
+      result.behind = Number(aheadBehindMatch[2]) || 0
+    }
+  }
+
+  return result
 }
 
 export function parseWorkingTreeChangedFiles(
@@ -453,4 +490,22 @@ export function parseWorktrees(raw: string): WorktreeSummary[] {
       branch: entries['branch']?.replace('refs/heads/', '') ?? '(detached)',
     }
   }).filter((worktree): worktree is WorktreeSummary => Boolean(worktree?.path))
+}
+
+async function summarizeWorktrees(worktrees: WorktreeSummary[]) {
+  return Promise.all(worktrees.map(async worktree => {
+    try {
+      const status = await git(worktree.path, ['--no-optional-locks', 'status', '--untracked-files=all', '--branch', '--porcelain=2', '-z'])
+      const branchStatus = parseStatusBranch(status)
+      return {
+        ...worktree,
+        branch: branchStatus.branch || worktree.branch,
+        upstream: branchStatus.upstream,
+        ahead: branchStatus.ahead,
+        behind: branchStatus.behind,
+      }
+    } catch {
+      return worktree
+    }
+  }))
 }

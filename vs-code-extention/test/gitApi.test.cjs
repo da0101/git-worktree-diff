@@ -8,6 +8,7 @@ const {
   parseCommitHistory,
   parseNumstat,
   parseStatus,
+  parseStatusBranch,
   parseStatusChangedFiles,
   parseWorkingTreeChangedFiles,
   parseWorktrees,
@@ -206,6 +207,37 @@ test('parseStatusChangedFiles handles renamed entries and skips staged add then 
     additions: 1,
     deletions: 1,
   }])
+})
+
+test('parseStatusBranch returns upstream ahead and behind counts', () => {
+  const status = [
+    '# branch.oid abc123',
+    '# branch.head feature/sync',
+    '# branch.upstream origin/feature/sync',
+    '# branch.ab +3 -2',
+    '1 M. N... 100644 100644 100644 abc123 abc123 src/file.ts',
+    '',
+  ].join('\0')
+
+  assert.deepEqual(parseStatusBranch(status), {
+    branch: 'feature/sync',
+    upstream: 'origin/feature/sync',
+    ahead: 3,
+    behind: 2,
+  })
+})
+
+test('parseStatusBranch defaults detached branch with no upstream to zero sync counts', () => {
+  const status = [
+    '# branch.head (detached)',
+    '',
+  ].join('\0')
+
+  assert.deepEqual(parseStatusBranch(status), {
+    branch: '(detached)',
+    ahead: 0,
+    behind: 0,
+  })
 })
 
 test('parseCommitHistory parses git log records with unit and record separators', () => {
