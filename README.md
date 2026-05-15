@@ -57,6 +57,38 @@ Launch it in VS Code:
 4. Add or select a tracked repository.
 5. Select changed files and use the Actions panel for commits, Git actions, or agent handoff.
 
+## Install Locally in VS Code
+
+You can install Git Worktree Diff globally in your local VS Code without publishing it to the Marketplace.
+
+Package version `1.1.0` as a `.vsix` file:
+
+```bash
+npm install
+npm run build
+npx @vscode/vsce package
+```
+
+This creates:
+
+```text
+git-worktree-diff-1.1.0.vsix
+```
+
+Install it into your normal VS Code user profile:
+
+```bash
+code --install-extension git-worktree-diff-1.1.0.vsix
+```
+
+After installing, restart VS Code. The Git Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
+
+Uninstall it later with:
+
+```bash
+code --uninstall-extension danilulmashev.git-worktree-diff
+```
+
 ## Agent Terminal Handoff
 
 The VS Code extension sends prompts to terminals that already exist in VS Code. Start Codex, Claude Code, Gemini, or another CLI agent in the integrated terminal, then choose that terminal from the Agent tab.

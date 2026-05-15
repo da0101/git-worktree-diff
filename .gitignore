@@ -20,6 +20,7 @@ node_modules/
 dist/
 */dist/
 */out/
+*.vsix
 
 # local/editor artifacts
 .DS_Store
