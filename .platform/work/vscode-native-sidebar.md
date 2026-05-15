@@ -51,12 +51,24 @@ closure_approved: false
 _Overwritten by `ab checkpoint` — the compact payload the next agent reads first. Keep this block under ~10 lines._
 
 - **Last updated:** 2026-05-15 by danilulmashev
-- **What just happened:** Added a dynamic inline Ask Agent CodeLens above non-empty editor selections so the quick ask flow is visible near selected diff/editor code.
+- **What just happened:** Added native VS Code History view for selected repo/worktree with git log parsing, commit file expansion, and native commit/file diff openers; full npm test passes.
 - **Current focus:** —
-- **Next action:** Reload/restart the Extension Development Host, select code in a diff/editor, verify an inline Ask Agent CodeLens appears above the selection, click it, enter a question, choose terminal, and verify send.
+- **Next action:** Reload Extension Development Host, select a repo/worktree in Worktrees, and verify the History view lists commits and expands changed files.
 - **Blockers:** none
 
 ## Progress log
+
+2026-05-15 14:22 — Added native VS Code History view for selected repo/worktree with git log parsing, commit file expansion, and native commit/file diff openers; full npm test passes.
+
+2026-05-15 14:14 — Renamed visible VS Code extension metadata from Git Worktree Diff to Worktree Diff while preserving command ids/storage ids; full npm test passes.
+
+2026-05-15 14:09 — Added unit coverage for Agent terminal detection, duplicate terminal labeling, process-tree parsing, and selected-file agent context selection; full npm test passes.
+
+2026-05-15 13:59 — Removed the inline CodeLens/custom Ask Agent webview experiment and restored editor selection sends to compose context in the left Actions panel Agent textarea.
+
+2026-05-15 13:56 — Replaced the editor selection quick ask flow with a compact custom Ask Agent webview panel containing selected-context label, textarea, terminal selector, Send, and Cancel controls.
+
+2026-05-15 13:48 — Changed the editor Send Selection command to open the quick Ask Agent input immediately, matching the lightbulb/menu expectation instead of routing through the sidebar draft.
 
 2026-05-15 13:45 — Added a dynamic inline Ask Agent CodeLens above non-empty editor selections so the quick ask flow is visible near selected diff/editor code.
 
@@ -66,16 +78,6 @@ _Overwritten by `ab checkpoint` — the compact payload the next agent reads fir
 
 2026-05-15 12:51 — Fixed duplicate agent terminals by using per-terminal ids instead of raw names, labels duplicate Codex terminals distinctly, and added automatic Actions view terminal refresh every 2.5s.
 
-2026-05-15 12:46 — Added agent terminal detection so VS Code terminal process labels like node can display as Codex/Claude/Gemini when the terminal process tree exposes the agent CLI.
-
-2026-05-15 12:41 — Fixed Agent tab terminal dropdown cleanup, multi-file selected context sends, visible Agent clear action, and automatic selection/draft clearing after a successful send.
-
-2026-05-15 12:31 — Corrected the Actions panel branch dropdown so it includes and selects the current main-repo branch; checkout only enables after choosing a different branch.
-
-2026-05-15 12:23 — Added repo-only branch checkout in the native Actions panel and locked linked worktrees out of checkout while preserving file/Git actions.
-
-2026-05-14 00:00 — Stream created for native-feeling VS Code Activity Bar/sidebar integration.
-2026-05-14 00:00 — Implemented Activity Bar/sidebar contributions and compact sidebar webview provider backed by `/api/repos`.
 ## Open questions
 
 _None._

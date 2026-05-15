@@ -1,8 +1,8 @@
 {
   "name": "git-worktree-diff",
-  "displayName": "Git Worktree Diff",
+  "displayName": "Worktree Diff",
   "description": "Inspect local Git diffs across repositories, branches, and worktrees from inside VS Code.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "publisher": "danilulmashev",
   "license": "UNLICENSED",
@@ -23,7 +23,7 @@
       "activitybar": [
         {
           "id": "gitWorktreeDiff",
-          "title": "Git Worktree Diff",
+          "title": "Worktree Diff",
           "icon": "vs-code-extention/media/icon.svg"
         }
       ]
@@ -36,6 +36,10 @@
           "icon": "vs-code-extention/media/icon.svg"
         },
         {
+          "id": "gitWorktreeDiff.history",
+          "name": "History"
+        },
+        {
           "id": "gitWorktreeDiff.actions",
           "name": "Actions",
           "type": "webview"
@@ -46,145 +50,163 @@
       {
         "command": "gitWorktreeDiff.addRepo",
         "title": "Add Repository",
-        "category": "Git Worktree Diff"
+        "category": "Worktree Diff"
       },
       {
         "command": "gitWorktreeDiff.removeRepo",
         "title": "Remove Repository",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(trash)"
       },
       {
         "command": "gitWorktreeDiff.refreshSidebar",
         "title": "Refresh Sidebar",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitWorktreeDiff.refreshHistory",
+        "title": "Refresh History",
+        "category": "Worktree Diff",
         "icon": "$(refresh)"
       },
       {
         "command": "gitWorktreeDiff.openNativeDiff",
         "title": "Open Native Diff",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(diff)"
       },
       {
         "command": "gitWorktreeDiff.stageFile",
         "title": "Stage File",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(add)"
       },
       {
         "command": "gitWorktreeDiff.unstageFile",
         "title": "Unstage File",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(remove)"
       },
       {
         "command": "gitWorktreeDiff.discardFile",
         "title": "Discard File Changes",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(discard)"
       },
       {
         "command": "gitWorktreeDiff.checkoutBranch",
         "title": "Checkout Branch",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(git-branch)"
       },
       {
         "command": "gitWorktreeDiff.fetch",
         "title": "Fetch",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(cloud-download)"
       },
       {
         "command": "gitWorktreeDiff.pull",
         "title": "Pull",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(arrow-down)"
       },
       {
         "command": "gitWorktreeDiff.push",
         "title": "Push",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(arrow-up)"
       },
       {
         "command": "gitWorktreeDiff.stageAll",
         "title": "Stage All Changes",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(add)"
       },
       {
         "command": "gitWorktreeDiff.unstageAll",
         "title": "Unstage All Changes",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(remove)"
       },
       {
         "command": "gitWorktreeDiff.sendSelectionToAgent",
         "title": "Send Selection to Agent Terminal",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(send)"
       },
       {
         "command": "gitWorktreeDiff.sendFileToAgent",
         "title": "Send File to Agent Terminal",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "gitWorktreeDiff.sendTreeFileToAgent",
-        "title": "Send Changed File to Agent Terminal",
-        "category": "Git Worktree Diff",
+        "title": "Send File or Selected Files to Agent Terminal",
+        "category": "Worktree Diff",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "gitWorktreeDiff.addToGitignore",
         "title": "Add to .gitignore",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(eye-closed)"
       },
       {
         "command": "gitWorktreeDiff.selectAllChangedFiles",
         "title": "Select All Changed Files",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(check-all)"
       },
       {
         "command": "gitWorktreeDiff.clearSelectedFiles",
         "title": "Clear Selected Files",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(clear-all)"
       },
       {
         "command": "gitWorktreeDiff.stageSelectedFiles",
         "title": "Stage Selected Files",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(add)"
       },
       {
         "command": "gitWorktreeDiff.unstageSelectedFiles",
         "title": "Unstage Selected Files",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(remove)"
       },
       {
         "command": "gitWorktreeDiff.discardSelectedFiles",
         "title": "Discard Selected Files",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(discard)"
       },
       {
         "command": "gitWorktreeDiff.addSelectedToGitignore",
         "title": "Add Selected Files to .gitignore",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(eye-closed)"
       },
       {
         "command": "gitWorktreeDiff.sendSelectedToAgent",
         "title": "Send Selected Files to Agent Terminal",
-        "category": "Git Worktree Diff",
+        "category": "Worktree Diff",
         "icon": "$(send)"
+      },
+      {
+        "command": "gitWorktreeDiff.openCommitDiff",
+        "title": "Open Commit Diff",
+        "category": "Worktree Diff",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "gitWorktreeDiff.openCommitFileDiff",
+        "title": "Open Commit File Diff",
+        "category": "Worktree Diff",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
@@ -197,6 +219,11 @@
         {
           "command": "gitWorktreeDiff.addRepo",
           "when": "view == gitWorktreeDiff.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "gitWorktreeDiff.refreshHistory",
+          "when": "view == gitWorktreeDiff.history",
           "group": "navigation"
         }
       ],
@@ -243,7 +270,7 @@
         },
         {
           "command": "gitWorktreeDiff.checkoutBranch",
-          "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|worktree/",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|main-worktree/",
           "group": "navigation"
         },
         {
@@ -274,6 +301,16 @@
         {
           "command": "gitWorktreeDiff.removeRepo",
           "when": "view == gitWorktreeDiff.sidebar && viewItem == repo",
+          "group": "navigation"
+        },
+        {
+          "command": "gitWorktreeDiff.openCommitDiff",
+          "when": "view == gitWorktreeDiff.history && viewItem == history-commit",
+          "group": "navigation"
+        },
+        {
+          "command": "gitWorktreeDiff.openCommitFileDiff",
+          "when": "view == gitWorktreeDiff.history && viewItem =~ /history-file-.*/",
           "group": "navigation"
         }
       ]

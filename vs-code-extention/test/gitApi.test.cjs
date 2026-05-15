@@ -5,6 +5,7 @@ const {
   buildAmendArgs,
   buildCommitArgs,
   parseChangedFiles,
+  parseCommitHistory,
   parseNumstat,
   parseStatus,
   parseWorktrees,
@@ -90,6 +91,40 @@ test('parseChangedFiles keeps files without numstat totals visible', () => {
     additions: 0,
     deletions: 0,
   }])
+})
+
+test('parseCommitHistory parses git log records with unit and record separators', () => {
+  const commits = parseCommitHistory([
+    'abc123456789\x1fabc1234\x1fDana Developer\x1fdana@example.com\x1f2026-05-15T10:00:00-04:00\x1fAdd history panel',
+    '\x1e',
+    'def987654321\x1fdef9876\x1fAlex Author\x1falex@example.com\x1f2026-05-14T09:30:00-04:00\x1fFix terminal selector',
+    '\x1e',
+  ].join(''))
+
+  assert.deepEqual(commits, [
+    {
+      sha: 'abc123456789',
+      shortSha: 'abc1234',
+      authorName: 'Dana Developer',
+      authorEmail: 'dana@example.com',
+      authoredAt: '2026-05-15T10:00:00-04:00',
+      subject: 'Add history panel',
+    },
+    {
+      sha: 'def987654321',
+      shortSha: 'def9876',
+      authorName: 'Alex Author',
+      authorEmail: 'alex@example.com',
+      authoredAt: '2026-05-14T09:30:00-04:00',
+      subject: 'Fix terminal selector',
+    },
+  ])
+})
+
+test('parseCommitHistory ignores incomplete records', () => {
+  const commits = parseCommitHistory('missing-subject\x1fshort\x1e\x1f\x1f\x1f\x1f\x1f')
+
+  assert.deepEqual(commits, [])
 })
 
 test('parseStatus maps added and deleted statuses explicitly', () => {

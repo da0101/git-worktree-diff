@@ -131,6 +131,26 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
     return repo.branches.filter(branch => branch !== activeBranch)
   }
 
+  getCheckoutBranchesForTarget(target?: RepoTarget) {
+    if (!target) return []
+    const repo = this.repos.find(repo => repo.path === target.repoPath)
+    if (!repo || !isMainRepoTarget(repo, target)) return []
+    return repo.branches
+  }
+
+  getCheckoutCurrentBranch(target?: RepoTarget) {
+    if (!target) return ''
+    const repo = this.repos.find(repo => repo.path === target.repoPath)
+    if (!repo || !isMainRepoTarget(repo, target)) return ''
+    return repo.branch
+  }
+
+  canCheckoutBranch(target?: RepoTarget) {
+    if (!target) return false
+    const repo = this.repos.find(repo => repo.path === target.repoPath)
+    return Boolean(repo && isMainRepoTarget(repo, target))
+  }
+
   private isSelected(selection: WorkbenchSelection) {
     return this.selectedFiles.has(selectionKey(selection))
   }
@@ -181,7 +201,7 @@ export class WorktreeItem extends vscode.TreeItem {
     this.tooltip = worktree.path
     this.iconPath = new vscode.ThemeIcon('git-branch')
     this.resourceUri = vscode.Uri.file(worktree.path)
-    this.contextValue = 'worktree'
+    this.contextValue = worktree.path === repo.path ? 'main-worktree' : 'worktree'
   }
 }
 
@@ -209,6 +229,10 @@ export class FileItem extends vscode.TreeItem {
 function normalizeWorktrees(repo: RepoSummary) {
   if (repo.worktrees.length > 0) return repo.worktrees
   return [{ path: repo.path, branch: repo.branch }]
+}
+
+function isMainRepoTarget(repo: RepoSummary, target: RepoTarget) {
+  return !target.worktreePath || target.worktreePath === repo.path
 }
 
 function statusIcon(status: FileDiffSummary['status']) {

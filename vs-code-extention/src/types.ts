@@ -44,3 +44,18 @@ export type RepoTarget = {
   repoPath: string
   worktreePath?: string
 }
+
+export interface CommitSummary {
+  sha: string
+  shortSha: string
+  authorName: string
+  authorEmail: string
+  authoredAt: string
+  subject: string
+}
+
+export type CommitFileSelection = RepoTarget & {
+  sha: string
+  filePath: string
+  fileStatus: FileDiffSummary['status']
+}

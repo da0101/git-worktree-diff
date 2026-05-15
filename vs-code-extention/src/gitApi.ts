@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { FileDiffSummary, RepoSummary, RepoTarget, WorkbenchSelection, WorktreeSummary } from './types'
+import type { CommitSummary, FileDiffSummary, RepoSummary, RepoTarget, WorkbenchSelection, WorktreeSummary } from './types'
 
 const execFileAsync = promisify(execFile)
 const storeDir = path.join(homedir(), '.git-worktree-diff')
@@ -30,6 +30,24 @@ export async function listChangedFiles(repoPath: string): Promise<FileDiffSummar
   const [nameStatus, numstat] = await Promise.all([
     git(repoPath, ['diff', 'HEAD', '--name-status', '--']),
     git(repoPath, ['diff', 'HEAD', '--numstat', '--']),
+  ])
+  return parseChangedFiles(nameStatus, numstat)
+}
+
+export async function listCommitHistory(repoPath: string, limit = 80): Promise<CommitSummary[]> {
+  const raw = await git(repoPath, [
+    'log',
+    `--max-count=${limit}`,
+    '--date=iso-strict',
+    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e',
+  ])
+  return parseCommitHistory(raw)
+}
+
+export async function listCommitFiles(repoPath: string, sha: string): Promise<FileDiffSummary[]> {
+  const [nameStatus, numstat] = await Promise.all([
+    git(repoPath, ['show', '--format=', '--name-status', '--no-renames', sha, '--']),
+    git(repoPath, ['show', '--format=', '--numstat', '--no-renames', sha, '--']),
   ])
   return parseChangedFiles(nameStatus, numstat)
 }
@@ -284,6 +302,20 @@ export function parseNumstat(numstat: string) {
     },
     { additions: 0, deletions: 0 },
   )
+}
+
+export function parseCommitHistory(raw: string): CommitSummary[] {
+  return raw.split('\x1e').map(entry => entry.trim()).filter(Boolean).map(entry => {
+    const [sha = '', shortSha = '', authorName = '', authorEmail = '', authoredAt = '', subject = ''] = entry.split('\x1f')
+    return {
+      sha,
+      shortSha,
+      authorName,
+      authorEmail,
+      authoredAt,
+      subject,
+    }
+  }).filter(commit => commit.sha && commit.subject)
 }
 
 export function parseWorktrees(raw: string): WorktreeSummary[] {

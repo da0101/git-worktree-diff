@@ -1,14 +1,19 @@
 import * as vscode from 'vscode'
-import { ActionPanelProvider } from './actionPanel'
+import { ActionPanelProvider, type TerminalOption } from './actionPanel'
+import { execFile } from 'node:child_process'
 import path from 'node:path'
+import { promisify } from 'node:util'
+import { buildTerminalOptions, chooseAgentSelectionsForTreeCommand, getProcessTreeCommands } from './agentUtils'
 import { GitWorktreeDiffDecorationProvider } from './fileDecorations'
 import { addPathToGitignore, addRepo, amendCommit, checkoutBranch, commitFiles, removeRepo, runFileAction, runRepoAction } from './gitApi'
-import { GitContentProvider, gitContentScheme, openNativeDiff } from './gitContentProvider'
+import { GitContentProvider, gitContentScheme, openCommitDiff, openCommitFileDiff, openNativeDiff } from './gitContentProvider'
+import { CommitFileItem, CommitItem, HistoryTreeProvider } from './historyTree'
 import { FileItem, RepoItem, RepoTreeProvider, WorktreeItem } from './repoTree'
 import type { RepoTarget, WorkbenchSelection } from './types'
 
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new RepoTreeProvider()
+  const historyProvider = new HistoryTreeProvider()
   const decorationProvider = new GitWorktreeDiffDecorationProvider()
   let activeTarget: RepoTarget | undefined
   let explicitAgentContext: AgentContext | undefined
@@ -16,14 +21,26 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: treeProvider,
     manageCheckboxStateManually: true,
   })
+  const historyView = vscode.window.createTreeView('gitWorktreeDiff.history', {
+    treeDataProvider: historyProvider,
+  })
   const actionPanel = new ActionPanelProvider(
     context.extensionUri,
     treeProvider,
     () => getTerminalOptions(context),
     () => getBranchOptions(treeProvider, activeTarget),
+    () => getCheckoutBranchOptions(treeProvider, activeTarget),
+    () => getCheckoutCurrentBranch(treeProvider, activeTarget),
+    () => canCheckoutBranch(treeProvider, activeTarget),
+    () => hasCheckoutTarget(treeProvider, activeTarget),
     async message => {
       if (message.type === 'selectAll') await treeProvider.selectAll(activeTarget)
-      if (message.type === 'clearSelection') treeProvider.clearSelection()
+      if (message.type === 'clearSelection') {
+        explicitAgentContext = undefined
+        treeProvider.clearSelection()
+        actionPanel.clearAgentContext()
+      }
+      if (message.type === 'checkoutActive') await checkoutPanelTarget(activeTarget, treeProvider, message.branch)
       if (message.type === 'stageSelected') await runSelectedFileAction('stage', treeProvider)
       if (message.type === 'unstageSelected') await runSelectedFileAction('unstage', treeProvider)
       if (message.type === 'discardSelected') await runSelectedFileAction('reject', treeProvider)
@@ -37,9 +54,16 @@ export function activate(context: vscode.ExtensionContext) {
       if (message.type === 'rebaseActive') await rebasePanelTarget(activeTarget, treeProvider, message.branch)
       if (message.type === 'sendAgent') {
         const agentContext = explicitAgentContext ?? await buildChangedFilesAgentContext(treeProvider.getSelectedFiles())
-        await sendAgentContext(context, agentContext, message.message, message.terminalName)
+        const sent = await sendAgentContext(context, agentContext, message.message, message.terminalName)
+        if (sent) {
+          explicitAgentContext = undefined
+          treeProvider.clearSelection()
+          actionPanel.clearAgentContext()
+          actionPanel.resetAgentDraft()
+        }
       }
       if (message.type === 'refreshTerminals') actionPanel.refresh()
+      if (message.type !== 'refreshTerminals' && message.type !== 'sendAgent') historyProvider.refresh()
       actionPanel.refresh()
     },
   )
@@ -60,10 +84,12 @@ export function activate(context: vscode.ExtensionContext) {
     if (!next) return
     activeTarget = next.target
     actionPanel.setActiveTarget(next.label)
+    historyProvider.setTarget(next.target, next.label)
   })
 
   context.subscriptions.push(
     treeView,
+    historyView,
     vscode.window.registerFileDecorationProvider(decorationProvider),
     vscode.window.onDidOpenTerminal(() => actionPanel.refresh()),
     vscode.window.onDidCloseTerminal(() => actionPanel.refresh()),
@@ -89,22 +115,22 @@ export function activate(context: vscode.ExtensionContext) {
       await removeTrackedRepo(item, treeProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.checkoutBranch', async (item: RepoItem | WorktreeItem) => {
-      await checkoutRepoBranch(item, treeProvider)
+      await checkoutRepoBranch(item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.fetch', async (item: RepoItem | WorktreeItem) => {
-      await runNativeRepoAction('fetch', item, treeProvider)
+      await runNativeRepoAction('fetch', item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.pull', async (item: RepoItem | WorktreeItem) => {
-      await runNativeRepoAction('pull', item, treeProvider)
+      await runNativeRepoAction('pull', item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.push', async (item: RepoItem | WorktreeItem) => {
-      await runNativeRepoAction('push', item, treeProvider)
+      await runNativeRepoAction('push', item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.stageAll', async (item: RepoItem | WorktreeItem) => {
-      await runNativeRepoAction('stageAll', item, treeProvider)
+      await runNativeRepoAction('stageAll', item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.unstageAll', async (item: RepoItem | WorktreeItem) => {
-      await runNativeRepoAction('unstageAll', item, treeProvider)
+      await runNativeRepoAction('unstageAll', item, treeProvider, historyProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.openNativeDiff', async (target: FileItem | WorkbenchSelection) => {
       await openNativeDiff(selectionFromTarget(target))
@@ -123,6 +149,18 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.refreshSidebar', () => {
       treeProvider.refresh()
+      historyProvider.refresh()
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.refreshHistory', () => {
+      historyProvider.refresh()
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.openCommitDiff', async (item: CommitItem | undefined) => {
+      if (!item) return
+      await openCommitDiff(item.commit, item.target)
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.openCommitFileDiff', async (target: CommitFileItem | undefined) => {
+      if (!target) return
+      await openCommitFileDiff(target.selection)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.selectAllChangedFiles', async () => {
       await treeProvider.selectAll()
@@ -143,16 +181,26 @@ export function activate(context: vscode.ExtensionContext) {
       await addSelectedToGitignore(treeProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendSelectionToAgent', async () => {
+      treeProvider.clearSelection()
       explicitAgentContext = buildEditorAgentContext(false)
       if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendFileToAgent', async () => {
+      treeProvider.clearSelection()
       explicitAgentContext = buildEditorAgentContext(true)
       if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendTreeFileToAgent', async (target: FileItem | WorkbenchSelection) => {
-      explicitAgentContext = await buildChangedFilesAgentContext([selectionFromTarget(target)])
-      if (explicitAgentContext) actionPanel.composeAgent(explicitAgentContext.label)
+      const selection = selectionFromTarget(target)
+      const selectedFiles = treeProvider.getSelectedFiles()
+      const selections = chooseAgentSelectionsForTreeCommand(selection, selectedFiles)
+      explicitAgentContext = selections.length > 1 ? undefined : await buildChangedFilesAgentContext(selections)
+      if (selections.length > 1) {
+        actionPanel.composeSelectedAgent()
+      } else if (explicitAgentContext) {
+        treeProvider.clearSelection()
+        actionPanel.composeAgent(explicitAgentContext.label)
+      }
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.sendSelectedToAgent', async () => {
       explicitAgentContext = undefined
@@ -228,6 +276,12 @@ async function commitSelectedFiles(treeProvider: RepoTreeProvider, summary: stri
 
   const target = ensureSingleWorktree(selections)
   if (!target) return
+  const confirmed = await vscode.window.showWarningMessage(
+    `Commit ${selections.length} selected file(s) in ${targetLabel(target)}?`,
+    { modal: true },
+    'Commit Selected Files',
+  )
+  if (confirmed !== 'Commit Selected Files') return
 
   try {
     const output = await commitFiles(target.worktreePath || target.repoPath, selections.map(selection => selection.filePath).filter(isString), summary, description)
@@ -294,6 +348,7 @@ async function runPanelRepoAction(
 ) {
   const target = activeTarget || targetFromSelectedFiles(treeProvider.getSelectedFiles())
   if (!target) return
+  if (action === 'push' && !await confirmPush(target)) return
 
   try {
     const output = await runRepoAction(action, target)
@@ -338,6 +393,38 @@ async function rebasePanelTarget(activeTarget: RepoTarget | undefined, treeProvi
   }
 }
 
+async function checkoutPanelTarget(activeTarget: RepoTarget | undefined, treeProvider: RepoTreeProvider, branch: string) {
+  const target = activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles())
+  if (!target) {
+    void vscode.window.showWarningMessage('Select the main repository worktree first.')
+    return
+  }
+
+  if (!treeProvider.canCheckoutBranch(target)) {
+    void vscode.window.showWarningMessage('Branch checkout is locked for linked worktrees. Select the main repository worktree to switch branches.')
+    return
+  }
+
+  if (!branch) {
+    void vscode.window.showWarningMessage('Choose a branch to checkout.')
+    return
+  }
+
+  if (branch === treeProvider.getCheckoutCurrentBranch(target)) {
+    void vscode.window.showInformationMessage(`${branch} is already checked out.`)
+    return
+  }
+
+  try {
+    const output = await checkoutBranch(target.repoPath, branch)
+    treeProvider.refresh()
+    void vscode.window.showInformationMessage(output || `Checked out ${branch}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to checkout branch'
+    void vscode.window.showErrorMessage(message)
+  }
+}
+
 async function addTrackedRepo(treeProvider: RepoTreeProvider) {
   const selected = await vscode.window.showOpenDialog({
     title: 'Track Git Repository',
@@ -372,10 +459,19 @@ async function removeTrackedRepo(item: RepoItem | undefined, treeProvider: RepoT
   treeProvider.refresh()
 }
 
-async function checkoutRepoBranch(item: RepoItem | WorktreeItem | undefined, treeProvider: RepoTreeProvider) {
+async function checkoutRepoBranch(
+  item: RepoItem | WorktreeItem | undefined,
+  treeProvider: RepoTreeProvider,
+  historyProvider: HistoryTreeProvider,
+) {
   if (!item) return
   const repo = item instanceof RepoItem ? item.repo : item.repo
-  const repoPath = item instanceof WorktreeItem ? item.worktree.path : repo.path
+  const target = targetFromItem(item)
+  if (!treeProvider.canCheckoutBranch(target)) {
+    void vscode.window.showWarningMessage('Branch checkout is locked for linked worktrees. Select the main repository worktree to switch branches.')
+    return
+  }
+
   const branch = await vscode.window.showQuickPick(
     repo.branches.filter(branch => branch !== repo.branch),
     { title: `Checkout branch in ${repo.name}` },
@@ -383,8 +479,9 @@ async function checkoutRepoBranch(item: RepoItem | WorktreeItem | undefined, tre
   if (!branch) return
 
   try {
-    const output = await checkoutBranch(repoPath, branch)
+    const output = await checkoutBranch(repo.path, branch)
     treeProvider.refresh()
+    historyProvider.refresh()
     void vscode.window.showInformationMessage(output || `Checked out ${branch}`)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to checkout branch'
@@ -396,11 +493,15 @@ async function runNativeRepoAction(
   action: 'fetch' | 'pull' | 'push' | 'stageAll' | 'unstageAll',
   item: RepoItem | WorktreeItem | undefined,
   treeProvider: RepoTreeProvider,
+  historyProvider: HistoryTreeProvider,
 ) {
   if (!item) return
+  const target = targetFromItem(item)
+  if (action === 'push' && !await confirmPush(target)) return
   try {
-    const output = await runRepoAction(action, targetFromItem(item))
+    const output = await runRepoAction(action, target)
     treeProvider.refresh()
+    historyProvider.refresh()
     void vscode.window.showInformationMessage(output || `${action} completed`)
   } catch (error) {
     const message = error instanceof Error ? error.message : `Unable to ${action}`
@@ -425,6 +526,19 @@ function selectionFromTarget(target: FileItem | WorkbenchSelection) {
 
 function targetFromItem(item: RepoItem | WorktreeItem): RepoTarget {
   return item.target
+}
+
+async function confirmPush(target: RepoTarget) {
+  const confirmed = await vscode.window.showWarningMessage(
+    `Push commits from ${targetLabel(target)} to its configured remote?`,
+    { modal: true },
+    'Push Commits',
+  )
+  return confirmed === 'Push Commits'
+}
+
+function targetLabel(target: RepoTarget) {
+  return baseName(target.worktreePath || target.repoPath)
 }
 
 function targetFromTreeSelection(item: RepoItem | WorktreeItem | FileItem | undefined): { target: RepoTarget; label: string } | null {
@@ -508,6 +622,7 @@ type AgentContextBlock = {
 
 const maxAgentContextChars = 12_000
 const lastTerminalKey = 'gitWorktreeDiff.lastAgentTerminal'
+const execFileAsync = promisify(execFile)
 
 function buildEditorAgentContext(wholeFile: boolean): AgentContext | undefined {
   const editor = vscode.window.activeTextEditor
@@ -577,28 +692,30 @@ async function sendAgentContext(
   context: vscode.ExtensionContext,
   agentContext: AgentContext | undefined,
   question: string,
-  terminalName: string,
-) {
+  terminalId: string,
+): Promise<boolean> {
   if (!agentContext) {
     void vscode.window.showWarningMessage('Choose files or select code before sending to an agent.')
-    return
+    return false
   }
 
   if (!question.trim()) {
     void vscode.window.showWarningMessage('Type a message for the agent first.')
-    return
+    return false
   }
 
-  const terminal = vscode.window.terminals.find(terminal => terminal.name === terminalName)
+  const terminal = await findTerminalById(terminalId)
   if (!terminal) {
     void vscode.window.showWarningMessage('That terminal is not available. Refresh terminals or open Codex/Claude/Gemini in a VS Code terminal.')
-    return
+    return false
   }
 
-  await context.globalState.update(lastTerminalKey, terminal.name)
+  await context.globalState.update(lastTerminalKey, await getTerminalId(terminal, vscode.window.terminals.indexOf(terminal)))
   terminal.show()
   terminal.sendText(buildAgentPrompt(agentContext, question), true)
+  return true
 }
+
 
 function buildAgentPrompt(agentContext: AgentContext, question: string) {
   let remaining = maxAgentContextChars
@@ -624,17 +741,77 @@ function buildAgentPrompt(agentContext: AgentContext, question: string) {
   ].join('\n')
 }
 
-function getTerminalOptions(context: vscode.ExtensionContext) {
-  const lastTerminalName = context.globalState.get<string>(lastTerminalKey)
-  return vscode.window.terminals.map(terminal => ({
-    name: terminal.name,
-    active: terminal === vscode.window.activeTerminal || terminal.name === lastTerminalName,
-  }))
+async function getTerminalOptions(context: vscode.ExtensionContext): Promise<TerminalOption[]> {
+  const lastTerminalId = context.globalState.get<string>(lastTerminalKey)
+  const summaries = []
+  for (const [index, terminal] of vscode.window.terminals.entries()) {
+    const name = terminal.name.trim()
+    if (!name) continue
+    const id = await getTerminalId(terminal, index)
+    const active = terminal === vscode.window.activeTerminal || id === lastTerminalId || name === lastTerminalId
+    summaries.push({
+      id,
+      name,
+      commandLine: await getTerminalCommandLine(terminal),
+      active,
+    })
+  }
+  return buildTerminalOptions(summaries)
+}
+
+async function findTerminalById(id: string) {
+  for (const [index, terminal] of vscode.window.terminals.entries()) {
+    if (await getTerminalId(terminal, index) === id) return terminal
+  }
+  return undefined
+}
+
+async function getTerminalId(terminal: vscode.Terminal, index: number) {
+  try {
+    const pid = await terminal.processId
+    if (pid) return `pid:${pid}`
+  } catch {
+    // Fall back to index below.
+  }
+  return `idx:${index}:${terminal.name.trim()}`
+}
+
+async function getTerminalCommandLine(terminal: vscode.Terminal) {
+  try {
+    const pid = await terminal.processId
+    if (!pid) return ''
+    const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,command='], {
+      timeout: 1000,
+      maxBuffer: 1024 * 1024,
+    })
+    return getProcessTreeCommands(String(stdout), pid).join('\n')
+  } catch {
+    return ''
+  }
 }
 
 function getBranchOptions(treeProvider: RepoTreeProvider, activeTarget: RepoTarget | undefined) {
   const target = activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles())
   return treeProvider.getBranchesForTarget(target).map(branch => ({ name: branch }))
+}
+
+function getCheckoutBranchOptions(treeProvider: RepoTreeProvider, activeTarget: RepoTarget | undefined) {
+  const target = activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles())
+  return treeProvider.getCheckoutBranchesForTarget(target).map(branch => ({ name: branch }))
+}
+
+function getCheckoutCurrentBranch(treeProvider: RepoTreeProvider, activeTarget: RepoTarget | undefined) {
+  const target = activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles())
+  return treeProvider.getCheckoutCurrentBranch(target)
+}
+
+function canCheckoutBranch(treeProvider: RepoTreeProvider, activeTarget: RepoTarget | undefined) {
+  const target = activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles())
+  return treeProvider.canCheckoutBranch(target)
+}
+
+function hasCheckoutTarget(treeProvider: RepoTreeProvider, activeTarget: RepoTarget | undefined) {
+  return Boolean(activeTarget || targetFromSelectedFilesWithoutWarning(treeProvider.getSelectedFiles()))
 }
 
 function targetFromSelectedFilesWithoutWarning(selections: WorkbenchSelection[]): RepoTarget | undefined {

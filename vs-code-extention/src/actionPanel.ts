@@ -2,7 +2,9 @@ import * as vscode from 'vscode'
 import type { RepoTreeProvider } from './repoTree'
 
 export type TerminalOption = {
+  id: string
   name: string
+  label: string
   active: boolean
 }
 
@@ -13,6 +15,7 @@ export type BranchOption = {
 type PanelMessage =
   | { type: 'selectAll' }
   | { type: 'clearSelection' }
+  | { type: 'checkoutActive'; branch: string }
   | { type: 'stageSelected' }
   | { type: 'unstageSelected' }
   | { type: 'discardSelected' }
@@ -29,14 +32,19 @@ type PanelMessage =
 
 export class ActionPanelProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView
+  private refreshTimer?: ReturnType<typeof setInterval>
   private activeTargetLabel = 'No worktree selected'
   private explicitAgentContextLabel: string | undefined
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly treeProvider: RepoTreeProvider,
-    private readonly getTerminalOptions: () => TerminalOption[],
+    private readonly getTerminalOptions: () => Promise<TerminalOption[]>,
     private readonly getBranchOptions: () => BranchOption[],
+    private readonly getCheckoutBranchOptions: () => BranchOption[],
+    private readonly getCheckoutCurrentBranch: () => string,
+    private readonly canCheckoutBranch: () => boolean,
+    private readonly hasCheckoutTarget: () => boolean,
     private readonly handleMessage: (message: PanelMessage) => Promise<void>,
   ) {}
 
@@ -52,12 +60,17 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       void this.handleMessage(message as PanelMessage)
     })
 
-    this.treeProvider.onDidChangeSelection(() => this.postState())
-    this.postState()
+    this.treeProvider.onDidChangeSelection(() => { void this.postState() })
+    this.refreshTimer = setInterval(() => { void this.postState() }, 2500)
+    view.onDidDispose(() => {
+      if (this.refreshTimer) clearInterval(this.refreshTimer)
+      this.refreshTimer = undefined
+    })
+    void this.postState()
   }
 
   refresh() {
-    this.postState()
+    void this.postState()
   }
 
   show() {
@@ -66,7 +79,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
 
   setActiveTarget(label: string) {
     this.activeTargetLabel = label
-    this.postState()
+    void this.postState()
   }
 
   composeAgent(label: string) {
@@ -76,7 +89,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       type: 'composeAgent',
       agentContextLabel: this.getAgentContextLabel(this.treeProvider.getSelectionSummary()),
     })
-    this.postState()
+    void this.postState()
   }
 
   composeSelectedAgent() {
@@ -87,15 +100,19 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       type: 'composeAgent',
       agentContextLabel: this.getAgentContextLabel(summary),
     })
-    this.postState()
+    void this.postState()
+  }
+
+  resetAgentDraft() {
+    void this.view?.webview.postMessage({ type: 'resetAgentDraft' })
   }
 
   clearAgentContext() {
     this.explicitAgentContextLabel = undefined
-    this.postState()
+    void this.postState()
   }
 
-  private postState() {
+  private async postState() {
     const summary = this.treeProvider.getSelectionSummary()
     void this.view?.webview.postMessage({
       type: 'state',
@@ -103,8 +120,12 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       repositories: summary.repositories,
       activeTargetLabel: this.activeTargetLabel,
       agentContextLabel: this.getAgentContextLabel(summary),
-      terminals: this.getTerminalOptions(),
+      terminals: await this.getTerminalOptions(),
       branches: this.getBranchOptions(),
+      checkoutBranches: this.getCheckoutBranchOptions(),
+      checkoutCurrentBranch: this.getCheckoutCurrentBranch(),
+      canCheckoutBranch: this.canCheckoutBranch(),
+      hasCheckoutTarget: this.hasCheckoutTarget(),
     })
   }
 
@@ -122,7 +143,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Git Worktree Diff Actions</title>
+  <title>Worktree Diff Actions</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -233,6 +254,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       margin-top: 8px;
       border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
     }
+    .lock-note {
+      margin: -2px 0 8px;
+      color: var(--vscode-descriptionForeground);
+    }
     .primary {
       min-height: 32px;
       font-weight: 600;
@@ -254,6 +279,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       <span class="count" id="count">0 files</span>
     </div>
     <div class="target" id="target">No worktree selected</div>
+
+    <select id="checkoutBranch" class="hidden"></select>
+    <button id="checkout" class="secondary hidden">Checkout branch</button>
+    <p class="lock-note hidden" id="checkoutLocked">Branch checkout is locked for linked worktrees.</p>
 
     <div class="grid two">
       <button id="selectAll" class="secondary">Select all</button>
@@ -299,6 +328,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     <textarea id="agentMessage" class="agent" placeholder="Ask Codex, Claude, or Gemini about the selected file(s) or highlighted code"></textarea>
     <div class="button-stack">
       <button id="sendAgent" class="primary">Send to terminal</button>
+      <button id="clearAgentSelection" class="secondary">Clear selected files</button>
       <button id="refreshTerminals" class="secondary">Refresh terminals</button>
     </div>
     <p class="muted">Tip: select code in the diff/editor, then right-click and choose Send Selection to Agent. This panel will open with that snippet as context.</p>
@@ -309,6 +339,8 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     let selectedFiles = 0;
     let repositories = 0;
     let activeTab = 'commit';
+    let checkoutCanRun = false;
+    let checkoutHasTarget = false;
 
     const summary = document.getElementById('summary');
     const description = document.getElementById('description');
@@ -324,11 +356,14 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     const agentTab = document.getElementById('agentTab');
     const gitAction = document.getElementById('gitAction');
     const rebaseBranch = document.getElementById('rebaseBranch');
+    const checkoutBranch = document.getElementById('checkoutBranch');
+    const checkout = document.getElementById('checkout');
+    const checkoutLocked = document.getElementById('checkoutLocked');
     const stashMessage = document.getElementById('stashMessage');
     const runGitAction = document.getElementById('runGitAction');
     const gitActionHint = document.getElementById('gitActionHint');
     const refreshTerminals = document.getElementById('refreshTerminals');
-    const gated = ['clear', 'commit']
+    const gated = ['clear', 'commit', 'clearAgentSelection']
       .map(id => document.getElementById(id));
     const selectedFileActions = new Set(['stageSelected', 'unstageSelected', 'ignoreSelected', 'discardSelected', 'amendSelected']);
 
@@ -349,6 +384,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     agentTab.addEventListener('click', () => setTab('agent'));
     document.getElementById('selectAll').addEventListener('click', () => send('selectAll'));
     document.getElementById('clear').addEventListener('click', () => send('clearSelection'));
+    document.getElementById('clearAgentSelection').addEventListener('click', () => send('clearSelection'));
     refreshTerminals.addEventListener('click', () => {
       refreshTerminals.disabled = true;
       refreshTerminals.innerHTML = '<span class="spinner"></span>Refreshing terminals';
@@ -362,6 +398,8 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       summary: summary.value,
       description: description.value,
     }));
+    checkout.addEventListener('click', () => send('checkoutActive', { branch: checkoutBranch.value }));
+    checkoutBranch.addEventListener('change', () => syncCheckoutState(checkoutCanRun, checkoutHasTarget, checkoutBranch.dataset.currentBranch || ''));
     gitAction.addEventListener('change', syncGitActionState);
     runGitAction.addEventListener('click', () => {
       if (gitAction.value === 'amendSelected') {
@@ -398,15 +436,32 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
         : 'This action applies to the selected worktree/repo.';
     }
 
+    function syncCheckoutState(canCheckout, hasTarget, currentBranch) {
+      const hasBranch = checkoutBranch.options.length > 0;
+      const selectedCurrentBranch = checkoutBranch.value === currentBranch;
+      checkoutBranch.classList.toggle('hidden', !canCheckout);
+      checkout.classList.toggle('hidden', !canCheckout);
+      checkoutLocked.classList.toggle('hidden', canCheckout || !hasTarget);
+      checkout.disabled = !canCheckout || !hasBranch || selectedCurrentBranch;
+      checkoutBranch.disabled = !canCheckout || !hasBranch;
+    }
+
     window.addEventListener('message', event => {
       if (event.data.type === 'composeAgent') {
         agentContext.textContent = event.data.agentContextLabel || 'Selected context';
         setTab('agent');
         return;
       }
+      if (event.data.type === 'resetAgentDraft') {
+        agentMessage.value = '';
+        return;
+      }
       if (event.data.type !== 'state') return;
       selectedFiles = event.data.selectedFiles || 0;
       repositories = event.data.repositories || 0;
+      checkoutCanRun = Boolean(event.data.canCheckoutBranch);
+      checkoutHasTarget = Boolean(event.data.hasCheckoutTarget);
+      const currentCheckoutBranch = event.data.checkoutCurrentBranch || '';
       target.textContent = event.data.activeTargetLabel || 'No worktree selected';
       agentContext.textContent = event.data.agentContextLabel || 'No agent context selected';
       count.textContent = selectedFiles + (selectedFiles === 1 ? ' file' : ' files') + (repositories > 1 ? ' / ' + repositories + ' worktrees' : '');
@@ -420,8 +475,8 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       terminal.innerHTML = '';
       for (const item of event.data.terminals || []) {
         const option = document.createElement('option');
-        option.value = item.name;
-        option.textContent = item.active ? '* ' + item.name + ' (active)' : item.name;
+        option.value = item.id;
+        option.textContent = item.active ? item.label + ' (active)' : item.label;
         terminal.appendChild(option);
       }
       if ([...terminal.options].some(option => option.value === oldValue)) terminal.value = oldValue;
@@ -433,6 +488,16 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
         rebaseBranch.appendChild(option);
       }
       if ([...rebaseBranch.options].some(option => option.value === oldBranch)) rebaseBranch.value = oldBranch;
+      checkoutBranch.innerHTML = '';
+      checkoutBranch.dataset.currentBranch = currentCheckoutBranch;
+      for (const item of event.data.checkoutBranches || []) {
+        const option = document.createElement('option');
+        option.value = item.name;
+        option.textContent = item.name;
+        checkoutBranch.appendChild(option);
+      }
+      if ([...checkoutBranch.options].some(option => option.value === currentCheckoutBranch)) checkoutBranch.value = currentCheckoutBranch;
+      syncCheckoutState(checkoutCanRun, checkoutHasTarget, currentCheckoutBranch);
       syncGitActionState();
     });
   </script>

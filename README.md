@@ -1,6 +1,6 @@
-# Git Worktree Diff
+# Worktree Diff
 
-Git Worktree Diff is a local-first workbench for reviewing changes across multiple Git repositories, branches, and worktrees from one place.
+Worktree Diff is a local-first workbench for reviewing changes across multiple Git repositories, branches, worktrees, and commit history from one place.
 
 The main use case is AI-assisted development where several agents are working in parallel on different branches or worktrees. Instead of jumping between terminal tabs, folders, and GitHub Desktop windows, this tool keeps the changed files, native diffs, Git actions, and agent handoff flow together.
 
@@ -8,8 +8,10 @@ The main use case is AI-assisted development where several agents are working in
 
 - Tracks local Git repositories and their worktrees.
 - Shows changed files across repos and branches.
+- Shows recent commit history with authors, changed files, and commit diffs.
 - Opens precise file diffs.
-- Supports selected-file Git actions such as commit, stage, unstage, discard, ignore, stash, push, pull, fetch, amend, and rebase.
+- Supports selected-file Git actions such as commit, stage, unstage, discard, ignore, stash, push, pull, fetch, amend, rebase, and branch checkout.
+- Keeps linked worktrees locked to their branch while allowing checkout in the main repo worktree.
 - Sends selected files or editor selections to an existing VS Code terminal running Codex, Claude Code, Gemini, or another CLI agent.
 - Keeps the browser app and VS Code extension separate so each can evolve for its own environment.
 
@@ -53,15 +55,16 @@ Launch it in VS Code:
 
 1. Open this repository in VS Code.
 2. Press `F5` to start the Extension Development Host.
-3. Open the Git Worktree Diff icon in the Activity Bar.
+3. Open the Worktree Diff icon in the Activity Bar.
 4. Add or select a tracked repository.
 5. Select changed files and use the Actions panel for commits, Git actions, or agent handoff.
+6. Open History to inspect previous commits and commit file diffs for the selected repo or worktree.
 
 ## Install Locally in VS Code
 
-You can install Git Worktree Diff globally in your local VS Code without publishing it to the Marketplace.
+You can install Worktree Diff globally in your local VS Code without publishing it to the Marketplace.
 
-Package version `1.1.0` as a `.vsix` file:
+Package version `1.2.0` as a `.vsix` file:
 
 ```bash
 npm install
@@ -72,16 +75,16 @@ npx @vscode/vsce package
 This creates:
 
 ```text
-git-worktree-diff-1.1.0.vsix
+git-worktree-diff-1.2.0.vsix
 ```
 
 Install it into your normal VS Code user profile:
 
 ```bash
-code --install-extension git-worktree-diff-1.1.0.vsix
+code --install-extension git-worktree-diff-1.2.0.vsix --force
 ```
 
-After installing, restart VS Code. The Git Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
+After installing, restart VS Code. The Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
 
 Uninstall it later with:
 
@@ -117,6 +120,6 @@ git diff --check
 Release tags use semantic versioning:
 
 ```bash
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
 ```
