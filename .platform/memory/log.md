@@ -5,6 +5,8 @@ One line per completed task. Newest at the top. Append-only.
 Format: `YYYY-MM-DD — <task> — <outcome> — <takeaway>`
 
 ---
+- 2026-05-15 — VS Code extension commit bugfixes — fixed selected commits with untracked files and stale multi-worktree checked selections, plus checkout-control spacing — selected-file commit flow must stage selected paths before committing
+- 2026-05-15 — commit `fc73cb0`: Show push and pull counts in worktree rows — auto-logged
 - 2026-05-15 — VS Code extension sync counts — added upstream ahead/behind parsing from porcelain v2 status headers and row labels for push/pull counts — GitHub Desktop parity needs both file status and branch sync state
 - 2026-05-15 — commit `eb81d49`: Adopt develop-first branch flow — auto-logged
 - 2026-05-15 — commit `3d15c6f`: Release v1.2.1 local extension update — auto-logged

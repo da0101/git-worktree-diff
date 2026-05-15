@@ -254,6 +254,15 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       margin-top: 8px;
       border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
     }
+    .checkout-controls {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .checkout-controls select,
+    .checkout-controls button {
+      margin-bottom: 0;
+    }
     .lock-note {
       margin: -2px 0 8px;
       color: var(--vscode-descriptionForeground);
@@ -280,8 +289,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     </div>
     <div class="target" id="target">No worktree selected</div>
 
-    <select id="checkoutBranch" class="hidden"></select>
-    <button id="checkout" class="secondary hidden">Checkout branch</button>
+    <div class="checkout-controls" id="checkoutControls">
+      <select id="checkoutBranch" class="hidden"></select>
+      <button id="checkout" class="secondary hidden">Checkout branch</button>
+    </div>
     <p class="lock-note hidden" id="checkoutLocked">Branch checkout is locked for linked worktrees.</p>
 
     <div class="grid two">
@@ -358,6 +369,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     const rebaseBranch = document.getElementById('rebaseBranch');
     const checkoutBranch = document.getElementById('checkoutBranch');
     const checkout = document.getElementById('checkout');
+    const checkoutControls = document.getElementById('checkoutControls');
     const checkoutLocked = document.getElementById('checkoutLocked');
     const stashMessage = document.getElementById('stashMessage');
     const runGitAction = document.getElementById('runGitAction');
@@ -439,6 +451,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     function syncCheckoutState(canCheckout, hasTarget, currentBranch) {
       const hasBranch = checkoutBranch.options.length > 0;
       const selectedCurrentBranch = checkoutBranch.value === currentBranch;
+      checkoutControls.classList.toggle('hidden', !canCheckout);
       checkoutBranch.classList.toggle('hidden', !canCheckout);
       checkout.classList.toggle('hidden', !canCheckout);
       checkoutLocked.classList.toggle('hidden', canCheckout || !hasTarget);

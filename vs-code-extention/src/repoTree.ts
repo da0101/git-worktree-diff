@@ -85,6 +85,8 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
       worktreePath: worktree.path,
     })))
 
+    this.selectedFiles.clear()
+
     for (const selectionTarget of targets) {
       const repoPath = selectionTarget.worktreePath || selectionTarget.repoPath
       const files = await this.getChangedFilesForPath(repoPath)

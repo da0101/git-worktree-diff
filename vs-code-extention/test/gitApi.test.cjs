@@ -19,7 +19,6 @@ test('buildCommitArgs limits commits to selected files', () => {
 
   assert.deepEqual(args, [
     'commit',
-    '--only',
     '-m',
     'Fix calendar',
     '-m',

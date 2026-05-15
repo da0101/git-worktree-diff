@@ -105,6 +105,7 @@ export async function runFileAction(action: 'stage' | 'unstage' | 'reject', sele
 export async function commitFiles(repoPath: string, files: string[], message: string, body?: string): Promise<string> {
   if (files.length === 0) throw new Error('No changed files to commit')
   if (!message.trim()) throw new Error('Commit message is required')
+  await git(repoPath, ['add', '--', ...files])
   return git(repoPath, buildCommitArgs(files, message, body))
 }
 
@@ -115,8 +116,8 @@ export async function amendCommit(target: RepoTarget, message?: string, body?: s
 
 export function buildCommitArgs(files: string[], message: string, body?: string) {
   const args = body?.trim()
-    ? ['commit', '--only', '-m', message.trim(), '-m', body.trim()]
-    : ['commit', '--only', '-m', message.trim()]
+    ? ['commit', '-m', message.trim(), '-m', body.trim()]
+    : ['commit', '-m', message.trim()]
   return [...args, '--', ...files]
 }
 
