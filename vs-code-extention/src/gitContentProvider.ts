@@ -60,7 +60,7 @@ export async function openNativeDiff(selection: WorkbenchSelection) {
   }
 
   const worktreePath = selection.worktreePath || selection.repoPath
-  const left = selection.fileStatus === 'added'
+  const left = selection.fileStatus === 'added' || selection.fileStatus === 'untracked'
     ? virtualUri(selection, 'empty')
     : virtualUri(selection, 'head')
   const right = selection.fileStatus === 'deleted'

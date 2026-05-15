@@ -1,8 +1,10 @@
+export type FileDiffStatus = 'modified' | 'added' | 'deleted' | 'untracked' | 'conflicted'
+
 export type WorkbenchSelection = {
   repoPath: string
   worktreePath?: string
   filePath?: string
-  fileStatus?: FileDiffSummary['status']
+  fileStatus?: FileDiffStatus
 }
 
 export interface WorktreeSummary {
@@ -35,7 +37,11 @@ export interface GitActionResult {
 
 export interface FileDiffSummary {
   path: string
-  status: 'modified' | 'added' | 'deleted'
+  status: FileDiffStatus
+  stagedStatus?: FileDiffStatus
+  unstagedStatus?: FileDiffStatus
+  oldPath?: string
+  rawStatus?: string
   additions: number
   deletions: number
 }
@@ -57,5 +63,5 @@ export interface CommitSummary {
 export type CommitFileSelection = RepoTarget & {
   sha: string
   filePath: string
-  fileStatus: FileDiffSummary['status']
+  fileStatus: FileDiffStatus
 }

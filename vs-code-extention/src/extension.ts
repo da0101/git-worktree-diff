@@ -17,6 +17,12 @@ export function activate(context: vscode.ExtensionContext) {
   const decorationProvider = new GitWorktreeDiffDecorationProvider()
   let activeTarget: RepoTarget | undefined
   let explicitAgentContext: AgentContext | undefined
+  const refreshGitState = () => {
+    treeProvider.refresh()
+    historyProvider.refresh()
+    actionPanel.refresh()
+  }
+  const externalRefreshTimer = setInterval(refreshGitState, 10_000)
   const treeView = vscode.window.createTreeView('gitWorktreeDiff.sidebar', {
     treeDataProvider: treeProvider,
     manageCheckboxStateManually: true,
@@ -90,7 +96,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     treeView,
     historyView,
+    { dispose: () => clearInterval(externalRefreshTimer) },
     vscode.window.registerFileDecorationProvider(decorationProvider),
+    vscode.window.onDidChangeWindowState(event => {
+      if (event.focused) refreshGitState()
+    }),
     vscode.window.onDidOpenTerminal(() => actionPanel.refresh()),
     vscode.window.onDidCloseTerminal(() => actionPanel.refresh()),
     vscode.window.onDidChangeActiveTerminal(() => actionPanel.refresh()),

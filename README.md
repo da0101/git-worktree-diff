@@ -64,27 +64,34 @@ Launch it in VS Code:
 
 You can install Worktree Diff globally in your local VS Code without publishing it to the Marketplace.
 
-Package version `1.2.0` as a `.vsix` file:
+Package the current version as a `.vsix` file:
 
 ```bash
 npm install
-npm run build
-npx @vscode/vsce package
+npm run package:extension
 ```
 
 This creates:
 
 ```text
-git-worktree-diff-1.2.0.vsix
+git-worktree-diff-1.2.1.vsix
 ```
 
 Install it into your normal VS Code user profile:
 
 ```bash
-code --install-extension git-worktree-diff-1.2.0.vsix --force
+code --install-extension git-worktree-diff-1.2.1.vsix --force
 ```
 
 After installing, restart VS Code. The Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
+
+For local testing before Marketplace release, rebuild and reinstall the current package version with one command:
+
+```bash
+npm run update:extension
+```
+
+Then run **Developer: Reload Window** in any open VS Code window that should pick up the new extension host code.
 
 Uninstall it later with:
 
@@ -120,6 +127,6 @@ git diff --check
 Release tags use semantic versioning:
 
 ```bash
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
+git tag -a v1.2.1 -m "Release v1.2.1"
+git push origin v1.2.1
 ```

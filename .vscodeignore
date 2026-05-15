@@ -1,8 +1,12 @@
 .git/**
 .platform/**
+.agents/**
+.claude/**
+.codex/**
 .vscode/**
 node_modules/**
 web/node_modules/**
+web/**
 web/src/**
 web/public/**
 web/*.config.*
@@ -15,6 +19,9 @@ vs-code-extention/src/**
 vs-code-extention/test/**
 vs-code-extention/tsconfig.json
 backend/**
+AGENTS.md
+CLAUDE.md
+GEMINI.md
 *.log
 
 !vs-code-extention/out/**

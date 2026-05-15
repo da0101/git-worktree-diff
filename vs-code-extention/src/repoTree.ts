@@ -209,8 +209,8 @@ export class FileItem extends vscode.TreeItem {
   constructor(readonly file: FileDiffSummary, readonly selection: WorkbenchSelection, selected: boolean) {
     super(file.path, vscode.TreeItemCollapsibleState.None)
     this.id = `file:${selection.repoPath}:${selection.worktreePath ?? ''}:${file.path}`
-    this.description = `${statusLabel(file.status)}  +${file.additions} -${file.deletions}`
-    this.tooltip = `${statusTitle(file.status)}\n${file.path}\n+${file.additions} -${file.deletions}`
+    this.description = `${changeStateLabel(file)}  +${file.additions} -${file.deletions}`
+    this.tooltip = `${changeStateTitle(file)}\n${file.path}\n+${file.additions} -${file.deletions}`
     this.iconPath = new vscode.ThemeIcon(statusIcon(file.status), statusColor(file.status))
     this.resourceUri = decoratedFileUri(selection, file)
     this.contextValue = `file-${file.status}`
@@ -237,26 +237,46 @@ function isMainRepoTarget(repo: RepoSummary, target: RepoTarget) {
 
 function statusIcon(status: FileDiffSummary['status']) {
   if (status === 'added') return 'diff-added'
+  if (status === 'untracked') return 'diff-added'
   if (status === 'deleted') return 'diff-removed'
+  if (status === 'conflicted') return 'warning'
   return 'diff-modified'
 }
 
 function statusColor(status: FileDiffSummary['status']) {
   if (status === 'added') return new vscode.ThemeColor('gitDecoration.addedResourceForeground')
+  if (status === 'untracked') return new vscode.ThemeColor('gitDecoration.untrackedResourceForeground')
   if (status === 'deleted') return new vscode.ThemeColor('gitDecoration.deletedResourceForeground')
+  if (status === 'conflicted') return new vscode.ThemeColor('gitDecoration.conflictingResourceForeground')
   return new vscode.ThemeColor('gitDecoration.modifiedResourceForeground')
 }
 
 function statusLabel(status: FileDiffSummary['status']) {
   if (status === 'added') return 'A'
+  if (status === 'untracked') return '?'
   if (status === 'deleted') return 'D'
+  if (status === 'conflicted') return '!'
   return 'M'
 }
 
 function statusTitle(status: FileDiffSummary['status']) {
   if (status === 'added') return 'Added file'
+  if (status === 'untracked') return 'Untracked file'
   if (status === 'deleted') return 'Deleted file'
+  if (status === 'conflicted') return 'Conflicted file'
   return 'Modified file'
+}
+
+function changeStateLabel(file: FileDiffSummary) {
+  const staged = file.stagedStatus ? `${statusLabel(file.stagedStatus)} staged` : ''
+  const unstaged = file.unstagedStatus ? `${statusLabel(file.unstagedStatus)} unstaged` : ''
+  return [staged, unstaged].filter(Boolean).join(' / ') || statusLabel(file.status)
+}
+
+function changeStateTitle(file: FileDiffSummary) {
+  const staged = file.stagedStatus ? `${statusTitle(file.stagedStatus)} staged` : ''
+  const unstaged = file.unstagedStatus ? `${statusTitle(file.unstagedStatus)} unstaged` : ''
+  return [staged, unstaged].filter(Boolean).join('\n') || statusTitle(file.status)
 }
 
 function decoratedFileUri(selection: WorkbenchSelection, file: FileDiffSummary) {

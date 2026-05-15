@@ -12,11 +12,11 @@ export class GitWorktreeDiffDecorationProvider implements vscode.FileDecorationP
 
     const params = new URLSearchParams(uri.query)
     const status = params.get('status') as FileDiffSummary['status'] | null
-    if (status === 'added') {
+    if (status === 'added' || status === 'untracked') {
       return new vscode.FileDecoration(
-        'A',
-        'Added file',
-        new vscode.ThemeColor('gitDecoration.addedResourceForeground'),
+        status === 'untracked' ? '?' : 'A',
+        status === 'untracked' ? 'Untracked file' : 'Added file',
+        new vscode.ThemeColor(status === 'untracked' ? 'gitDecoration.untrackedResourceForeground' : 'gitDecoration.addedResourceForeground'),
       )
     }
 
@@ -33,6 +33,14 @@ export class GitWorktreeDiffDecorationProvider implements vscode.FileDecorationP
         'M',
         'Modified file',
         new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'),
+      )
+    }
+
+    if (status === 'conflicted') {
+      return new vscode.FileDecoration(
+        '!',
+        'Conflicted file',
+        new vscode.ThemeColor('gitDecoration.conflictingResourceForeground'),
       )
     }
 

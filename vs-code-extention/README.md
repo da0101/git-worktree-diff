@@ -34,7 +34,7 @@ Select repo/worktree -> History view -> commit -> changed file diff
 Local install:
 
 ```bash
-npm run build:extension
-npx @vscode/vsce package
-code --install-extension git-worktree-diff-1.2.0.vsix --force
+npm run update:extension
 ```
+
+Reload any open VS Code window after reinstalling so the extension host loads the rebuilt output.

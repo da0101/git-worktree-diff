@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { CommitSummary, FileDiffSummary, RepoSummary, RepoTarget, WorkbenchSelection, WorktreeSummary } from './types'
+import type { CommitSummary, FileDiffStatus, FileDiffSummary, RepoSummary, RepoTarget, WorkbenchSelection, WorktreeSummary } from './types'
 
 const execFileAsync = promisify(execFile)
 const storeDir = path.join(homedir(), '.git-worktree-diff')
@@ -27,11 +27,11 @@ export async function removeRepo(repoPath: string): Promise<void> {
 }
 
 export async function listChangedFiles(repoPath: string): Promise<FileDiffSummary[]> {
-  const [nameStatus, numstat] = await Promise.all([
-    git(repoPath, ['diff', 'HEAD', '--name-status', '--']),
+  const [status, numstat] = await Promise.all([
+    git(repoPath, ['--no-optional-locks', 'status', '--untracked-files=all', '--branch', '--porcelain=2', '-z']),
     git(repoPath, ['diff', 'HEAD', '--numstat', '--']),
   ])
-  return parseChangedFiles(nameStatus, numstat)
+  return parseStatusChangedFiles(status, numstat)
 }
 
 export async function listCommitHistory(repoPath: string, limit = 80): Promise<CommitSummary[]> {
@@ -165,7 +165,7 @@ async function summarizeRepo(repo: { path: string }): Promise<RepoSummary> {
     const [branch, branches, status, numstat, worktreeRaw] = await Promise.all([
       git(repo.path, ['branch', '--show-current']),
       listBranches(repo.path),
-      git(repo.path, ['status', '--short']),
+      git(repo.path, ['--no-optional-locks', 'status', '--untracked-files=all', '--branch', '--porcelain=2', '-z']),
       git(repo.path, ['diff', 'HEAD', '--numstat', '--']),
       git(repo.path, ['worktree', 'list', '--porcelain']),
     ])
@@ -177,7 +177,7 @@ async function summarizeRepo(repo: { path: string }): Promise<RepoSummary> {
       branch: branch || '(detached)',
       branches,
       worktrees: parseWorktrees(worktreeRaw),
-      changedFiles: status.split('\n').filter(Boolean).length,
+      changedFiles: parseStatusChangedFiles(status, numstat).length,
       additions: totals.additions,
       deletions: totals.deletions,
     }
@@ -285,10 +285,131 @@ export function parseChangedFiles(nameStatus: string, numstat: string): FileDiff
   })
 }
 
+export function parseStatusChangedFiles(status: string, numstat: string): FileDiffSummary[] {
+  const totals = parseNumstatByPath(numstat)
+  const files = new Map<string, FileDiffSummary>()
+  const tokens = status.split('\0').filter(Boolean)
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (!token || token.startsWith('# ')) continue
+
+    const kind = token[0]
+    if (kind === '1') {
+      const match = /^1 ([MADRCUTX?!.]{2}) (?:N\.\.\.|S[C.][M.][U.]) \d+ \d+ \d+ [a-f0-9]+ [a-f0-9]+ ([\s\S]*)$/.exec(token)
+      if (!match) continue
+      addStatusFile(files, match[2], match[1], totals)
+    } else if (kind === '2') {
+      const match = /^2 ([MADRCUTX?!.]{2}) (?:N\.\.\.|S[C.][M.][U.]) \d+ \d+ \d+ [a-f0-9]+ [a-f0-9]+ [RC]\d+ ([\s\S]*)$/.exec(token)
+      if (!match) continue
+      const oldPath = tokens[index + 1]
+      index += 1
+      addStatusFile(files, match[2], match[1], totals, oldPath)
+    } else if (kind === 'u') {
+      const match = /^u ([DAU]{2}) (?:N\.\.\.|S[C.][M.][U.]) \d+ \d+ \d+ \d+ [a-f0-9]+ [a-f0-9]+ [a-f0-9]+ ([\s\S]*)$/.exec(token)
+      if (!match) continue
+      addStatusFile(files, match[2], match[1], totals)
+    } else if (kind === '?') {
+      addStatusFile(files, token.slice(2), '??', totals)
+    }
+  }
+
+  return [...files.values()]
+}
+
+export function parseWorkingTreeChangedFiles(
+  unstagedNameStatus: string,
+  unstagedNumstat: string,
+  stagedNameStatus: string,
+  stagedNumstat: string,
+): FileDiffSummary[] {
+  const files = new Map<string, FileDiffSummary>()
+
+  for (const file of parseChangedFiles(stagedNameStatus, stagedNumstat)) {
+    files.set(file.path, {
+      ...file,
+      stagedStatus: file.status,
+    })
+  }
+
+  for (const file of parseChangedFiles(unstagedNameStatus, unstagedNumstat)) {
+    const existing = files.get(file.path)
+    files.set(file.path, {
+      path: file.path,
+      status: existing?.status ?? file.status,
+      stagedStatus: existing?.stagedStatus,
+      unstagedStatus: file.status,
+      additions: (existing?.additions ?? 0) + file.additions,
+      deletions: (existing?.deletions ?? 0) + file.deletions,
+    })
+  }
+
+  return [...files.values()]
+}
+
 export function parseStatus(rawStatus: string): FileDiffSummary['status'] {
   if (rawStatus.startsWith('A')) return 'added'
   if (rawStatus.startsWith('D')) return 'deleted'
   return 'modified'
+}
+
+function addStatusFile(
+  files: Map<string, FileDiffSummary>,
+  filePath: string,
+  rawStatus: string,
+  totals: Map<string, { additions: number; deletions: number }>,
+  oldPath?: string,
+) {
+  const stagedStatus = rawStatus === '??' ? undefined : mapPorcelainStatus(rawStatus[0])
+  const unstagedStatus = rawStatus === '??' ? 'untracked' : mapPorcelainStatus(rawStatus[1])
+
+  if (stagedStatus === 'added' && unstagedStatus === 'deleted') return
+
+  const status = primaryStatus(stagedStatus, unstagedStatus)
+  if (!status) return
+
+  if (status === 'untracked') {
+    files.delete(filePath)
+  }
+
+  const total = totals.get(filePath) ?? { additions: 0, deletions: 0 }
+  files.set(filePath, {
+    path: filePath,
+    status,
+    stagedStatus,
+    unstagedStatus,
+    oldPath,
+    rawStatus,
+    additions: total.additions,
+    deletions: total.deletions,
+  })
+}
+
+function mapPorcelainStatus(value: string | undefined): FileDiffStatus | undefined {
+  if (!value || value === '.') return undefined
+  if (value === '?') return 'untracked'
+  if (value === 'A') return 'added'
+  if (value === 'D') return 'deleted'
+  if (value === 'U') return 'conflicted'
+  return 'modified'
+}
+
+function primaryStatus(stagedStatus: FileDiffStatus | undefined, unstagedStatus: FileDiffStatus | undefined) {
+  if (stagedStatus === 'conflicted' || unstagedStatus === 'conflicted') return 'conflicted'
+  return stagedStatus ?? unstagedStatus
+}
+
+function parseNumstatByPath(numstat: string) {
+  const totals = new Map<string, { additions: number; deletions: number }>()
+  for (const line of numstat.split('\n').filter(Boolean)) {
+    const [rawAdditions, rawDeletions, ...pathParts] = line.split('\t')
+    const filePath = pathParts[pathParts.length - 1] ?? ''
+    totals.set(filePath, {
+      additions: rawAdditions === '-' ? 0 : Number(rawAdditions) || 0,
+      deletions: rawDeletions === '-' ? 0 : Number(rawDeletions) || 0,
+    })
+  }
+  return totals
 }
 
 export function parseNumstat(numstat: string) {
@@ -323,12 +444,13 @@ export function parseWorktrees(raw: string): WorktreeSummary[] {
     const entries = Object.fromEntries(
       block.split('\n').filter(Boolean).map(line => {
         const spaceIdx = line.indexOf(' ')
-        return [line.slice(0, spaceIdx), line.slice(spaceIdx + 1)]
+        return spaceIdx === -1 ? [line, ''] : [line.slice(0, spaceIdx), line.slice(spaceIdx + 1)]
       }),
     )
+    if ('prunable' in entries) return null
     return {
       path: entries['worktree'],
       branch: entries['branch']?.replace('refs/heads/', '') ?? '(detached)',
     }
-  }).filter((worktree): worktree is WorktreeSummary => Boolean(worktree.path))
+  }).filter((worktree): worktree is WorktreeSummary => Boolean(worktree?.path))
 }

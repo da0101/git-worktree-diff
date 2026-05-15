@@ -8,6 +8,8 @@ const {
   parseCommitHistory,
   parseNumstat,
   parseStatus,
+  parseStatusChangedFiles,
+  parseWorkingTreeChangedFiles,
   parseWorktrees,
 } = require('../out/gitApi.js')
 
@@ -93,6 +95,119 @@ test('parseChangedFiles keeps files without numstat totals visible', () => {
   }])
 })
 
+test('parseWorkingTreeChangedFiles includes staged-only files', () => {
+  const files = parseWorkingTreeChangedFiles(
+    '',
+    '',
+    'A\tsrc/staged.ts\nD\tsrc/removed.ts',
+    '4\t0\tsrc/staged.ts\n0\t3\tsrc/removed.ts',
+  )
+
+  assert.deepEqual(files, [
+    {
+      path: 'src/staged.ts',
+      status: 'added',
+      stagedStatus: 'added',
+      additions: 4,
+      deletions: 0,
+    },
+    {
+      path: 'src/removed.ts',
+      status: 'deleted',
+      stagedStatus: 'deleted',
+      additions: 0,
+      deletions: 3,
+    },
+  ])
+})
+
+test('parseWorkingTreeChangedFiles merges staged and unstaged states for one path', () => {
+  const files = parseWorkingTreeChangedFiles(
+    'M\tsrc/file.ts',
+    '2\t1\tsrc/file.ts',
+    'M\tsrc/file.ts',
+    '5\t0\tsrc/file.ts',
+  )
+
+  assert.deepEqual(files, [{
+    path: 'src/file.ts',
+    status: 'modified',
+    stagedStatus: 'modified',
+    unstagedStatus: 'modified',
+    additions: 7,
+    deletions: 1,
+  }])
+})
+
+test('parseStatusChangedFiles follows porcelain v2 XY status and includes untracked files', () => {
+  const status = [
+    '# branch.head main',
+    '1 M. N... 100644 100644 100644 abc123 abc123 src/staged.ts',
+    '1 .M N... 100644 100644 100644 abc123 abc123 src/unstaged.ts',
+    '? src/new file.ts',
+    '',
+  ].join('\0')
+  const files = parseStatusChangedFiles(
+    status,
+    '5\t1\tsrc/staged.ts\n2\t3\tsrc/unstaged.ts',
+  )
+
+  assert.deepEqual(files, [
+    {
+      path: 'src/staged.ts',
+      status: 'modified',
+      stagedStatus: 'modified',
+      unstagedStatus: undefined,
+      oldPath: undefined,
+      rawStatus: 'M.',
+      additions: 5,
+      deletions: 1,
+    },
+    {
+      path: 'src/unstaged.ts',
+      status: 'modified',
+      stagedStatus: undefined,
+      unstagedStatus: 'modified',
+      oldPath: undefined,
+      rawStatus: '.M',
+      additions: 2,
+      deletions: 3,
+    },
+    {
+      path: 'src/new file.ts',
+      status: 'untracked',
+      stagedStatus: undefined,
+      unstagedStatus: 'untracked',
+      oldPath: undefined,
+      rawStatus: '??',
+      additions: 0,
+      deletions: 0,
+    },
+  ])
+})
+
+test('parseStatusChangedFiles handles renamed entries and skips staged add then deleted', () => {
+  const status = [
+    '2 R. N... 100644 100644 100644 abc123 abc123 R100 src/new.ts',
+    'src/old.ts',
+    '1 AD N... 000000 100644 000000 abc123 abc123 src/transient.ts',
+    '',
+  ].join('\0')
+
+  const files = parseStatusChangedFiles(status, '1\t1\tsrc/old.ts\tsrc/new.ts')
+
+  assert.deepEqual(files, [{
+    path: 'src/new.ts',
+    status: 'modified',
+    stagedStatus: 'modified',
+    unstagedStatus: undefined,
+    oldPath: 'src/old.ts',
+    rawStatus: 'R.',
+    additions: 1,
+    deletions: 1,
+  }])
+})
+
 test('parseCommitHistory parses git log records with unit and record separators', () => {
   const commits = parseCommitHistory([
     'abc123456789\x1fabc1234\x1fDana Developer\x1fdana@example.com\x1f2026-05-15T10:00:00-04:00\x1fAdd history panel',
@@ -167,5 +282,22 @@ test('parseWorktrees handles detached worktrees', () => {
 
   assert.deepEqual(worktrees, [
     { path: '/repo-detached', branch: '(detached)' },
+  ])
+})
+
+test('parseWorktrees ignores prunable missing worktrees', () => {
+  const worktrees = parseWorktrees([
+    'worktree /repo',
+    'HEAD abc123',
+    'branch refs/heads/main',
+    '',
+    'worktree /repo-missing',
+    'HEAD def456',
+    'branch refs/heads/feature/missing',
+    'prunable gitdir file points to non-existent location',
+  ].join('\n'))
+
+  assert.deepEqual(worktrees, [
+    { path: '/repo', branch: 'main' },
   ])
 })
