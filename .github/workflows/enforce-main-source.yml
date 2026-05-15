@@ -1,0 +1,17 @@
+name: Enforce main source branch
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  require-develop-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require develop into main
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "Only develop may merge into main. Open feature and bugfix PRs into develop."
+            exit 1
+          fi

@@ -122,6 +122,35 @@ npm run lint:web
 git diff --check
 ```
 
+## Branch Flow
+
+This repository uses a simple `develop`-first flow:
+
+- `develop` is the default development branch.
+- Feature and bugfix branches start from `develop`.
+- `main` is the release branch.
+- Only `develop` should merge into `main`.
+- Release tags are cut from `main` after `develop` is merged and verified.
+
+Typical feature flow:
+
+```bash
+git fetch origin
+git switch develop
+git pull --ff-only
+git switch -c feature/<short-name>
+```
+
+Release flow:
+
+```bash
+git switch main
+git pull --ff-only
+git merge --ff-only origin/develop
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin main vX.Y.Z
+```
+
 ## Release Tags
 
 Release tags use semantic versioning:

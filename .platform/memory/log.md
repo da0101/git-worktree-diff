@@ -5,7 +5,7 @@ One line per completed task. Newest at the top. Append-only.
 Format: `YYYY-MM-DD — <task> — <outcome> — <takeaway>`
 
 ---
-- 2026-05-15 — commit `53a8203`: Release v1.2.1 local extension update — auto-logged
+- 2026-05-15 — commit `3d15c6f`: Release v1.2.1 local extension update — auto-logged
 - 2026-05-15 — debug: VS Code extension staged-only changes — fixed root cause by switching the worktree tree to GitHub Desktop-style porcelain v2 status parsing — changed files must be modeled from Git status, with diff used only as decoration
 - 2026-05-15 — commit `e1d6c4c`: Add history view and release v1.2.0 — auto-logged
 - 2026-05-15 — commit `3a1b8b7`: Updatred stream file — auto-logged

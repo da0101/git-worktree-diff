@@ -24,7 +24,7 @@ Detect new stream → Register → Worktree + local env → Clarify → Research
 - **Research is always required for new streams.** Scale the depth to the task: small/low-risk streams may use a compact local + targeted web check, while medium+ or risky streams need the full research pass.
 - **Research must be specific to the work.** Cover the problem, comparable external examples or prior art, current patterns, implementation techniques, best practices, local code/docs, caveats, and a recommendation.
 - **Planning follows research.** Plans must include development phases, complexity, risk mitigation, alternatives considered, files to touch, tests, rollback path, and clarifying questions if anything is still ambiguous.
-- **Work starts in isolated worktrees.** Before implementation for feature, bugfix, or hotfix streams, create or switch to separate Git worktree branches for every touched repo. Feature and bugfix branches start from `develop`; hotfix branches start from `master` only when the user explicitly says "hotfix".
+- **Work starts in isolated worktrees.** Before implementation for feature, bugfix, or hotfix streams, create or switch to separate Git worktree branches for every touched repo. Feature and bugfix branches start from `develop`. `main` is release-only and should receive merges from `develop` only.
 - **Local environment is prepared before coding.** In every touched worktree, install the repo's development dependencies and identify the local dev command plus localhost port(s) before implementation or manual QA planning.
 - **Human-in-the-loop is mandatory.** The agent must present the research-backed plan and wait for human validation/approval before implementation starts. During implementation, the agent must pause for clarification when the approved plan no longer fits reality.
 - **Implementation follows the approved plan.** Deviations are called out explicitly in chat and captured in the stream file via checkpoint/progress state when they affect scope, risk, or next action.
@@ -68,12 +68,12 @@ Before feature, bugfix, or hotfix implementation begins, isolate the work from t
 1. **Determine stream kind and branch name**
    - Feature work: `feature/<stream-slug>` from `develop`
    - Bug fixes: `bugfix/<stream-slug>` from `develop`
-   - Hotfixes: `hotfix/<stream-slug>` from `master` only when the user explicitly says this is a hotfix
-   - If a repo uses a different production branch, use it only when the project docs or user explicitly override `master`.
+   - Hotfixes: `hotfix/<stream-slug>` from `develop` unless the user explicitly approves a release-branch exception
+   - If a repo uses a different development branch, use it only when the project docs or user explicitly override `develop`.
 2. **Create or enter a separate worktree for every touched repo**
    - Example feature: `git fetch origin && git worktree add ../<repo>-<stream-slug> -b feature/<stream-slug> origin/develop`
    - Example bugfix: `git fetch origin && git worktree add ../<repo>-<stream-slug> -b bugfix/<stream-slug> origin/develop`
-   - Example hotfix: `git fetch origin && git worktree add ../<repo>-<stream-slug> -b hotfix/<stream-slug> origin/master`
+   - Example hotfix: `git fetch origin && git worktree add ../<repo>-<stream-slug> -b hotfix/<stream-slug> origin/develop`
    - If the branch/worktree already exists, verify it points at the correct base and continue there. Do not mix stream work into the main checkout.
 3. **Install development dependencies in each touched worktree**
    - Use the repo's lockfile and toolchain: `npm ci`, `yarn install --frozen-lockfile`, `pnpm install --frozen-lockfile`, `uv sync`, `pip install -r requirements.txt`, `flutter pub get`, etc.
