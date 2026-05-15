@@ -5,6 +5,7 @@ One line per completed task. Newest at the top. Append-only.
 Format: `YYYY-MM-DD — <task> — <outcome> — <takeaway>`
 
 ---
+- 2026-05-15 — commit `e1d6c4c`: Add history view and release v1.2.0 — auto-logged
 - 2026-05-15 — commit `3a1b8b7`: Updatred stream file — auto-logged
 - 2026-05-14 — commit `80200b5`: Add native VS Code worktree diff extension — auto-logged
 
