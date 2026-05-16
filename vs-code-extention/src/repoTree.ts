@@ -10,13 +10,17 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
   readonly onDidChangeSelection = this.selectionChanged.event
 
   private repos: RepoSummary[] = []
+  private knownRepoItems: RepoItem[] = []
   private filesByPath = new Map<string, FileDiffSummary[]>()
   private selectedFiles = new Map<string, WorkbenchSelection>()
 
   refresh() {
     this.filesByPath.clear()
     this.pruneSelection()
-    this.changed.fire()
+    this.changed.fire(undefined)
+    for (const item of this.knownRepoItems) {
+      this.changed.fire(item)
+    }
     this.emitSelectionChanged()
   }
 
@@ -27,7 +31,8 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
   async getChildren(element?: RepoTreeItem): Promise<RepoTreeItem[]> {
     if (!element) {
       this.repos = await listRepos()
-      return this.repos.map(repo => new RepoItem(repo))
+      this.knownRepoItems = this.repos.map(repo => new RepoItem(repo))
+      return this.knownRepoItems
     }
 
     if (element instanceof RepoItem) {
@@ -63,9 +68,8 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<RepoTreeItem> {
   }
 
   async getChangedFilesForPath(repoPath: string) {
-    const cached = this.filesByPath.get(repoPath)
-    const files = cached ?? await listChangedFiles(repoPath)
-    if (!cached) this.filesByPath.set(repoPath, files)
+    const files = await listChangedFiles(repoPath)
+    this.filesByPath.set(repoPath, files)
     return files
   }
 

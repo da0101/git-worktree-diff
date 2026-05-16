@@ -5,6 +5,10 @@ One line per completed task. Newest at the top. Append-only.
 Format: `YYYY-MM-DD — <task> — <outcome> — <takeaway>`
 
 ---
+- 2026-05-16 — vscode-agent-handoff — closed by user — terminal handoff, native Git commands shipped in v1.2.x releases
+- 2026-05-16 — vscode-native-sidebar — closed by user — Activity Bar, sidebar, History view, native diff/stage/discard shipped in v1.2.0–v1.2.4
+- 2026-05-16 — diff-visibility-project-repos — closed by user — diff scroll fix and Agentboard repo discovery shipped; verified implicitly by continued use through v1.2.4
+- 2026-05-16 — vscode-extension-workbench — closed by user — initial React WebviewPanel wrapper was superseded by the native VS Code extension; both exist and serve different use cases
 - 2026-05-15 — VS Code extension commit bugfixes — fixed selected commits with untracked files and stale multi-worktree checked selections, plus checkout-control spacing — selected-file commit flow must stage selected paths before committing
 - 2026-05-15 — commit `fc73cb0`: Show push and pull counts in worktree rows — auto-logged
 - 2026-05-15 — VS Code extension sync counts — added upstream ahead/behind parsing from porcelain v2 status headers and row labels for push/pull counts — GitHub Desktop parity needs both file status and branch sync state
