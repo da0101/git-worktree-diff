@@ -330,7 +330,8 @@ function syncTooltip(target: { ahead?: number; behind?: number }) {
 }
 
 function selectionKey(selection: WorkbenchSelection) {
-  return `${selection.repoPath}\0${selection.worktreePath ?? ''}\0${selection.filePath ?? ''}`
+  const wp = selection.worktreePath !== selection.repoPath ? (selection.worktreePath ?? '') : ''
+  return `${selection.repoPath}\0${wp}\0${selection.filePath ?? ''}`
 }
 
 export type SelectionSummary = {
