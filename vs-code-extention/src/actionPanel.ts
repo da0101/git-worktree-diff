@@ -24,6 +24,9 @@ type PanelMessage =
   | { type: 'amendSelected'; summary: string; description: string }
   | { type: 'fetchActive' }
   | { type: 'pullActive' }
+  | { type: 'pullRebaseActive' }
+  | { type: 'pullMergeActive' }
+  | { type: 'pullWithStashActive' }
   | { type: 'pushActive' }
   | { type: 'stashActive'; message: string }
   | { type: 'rebaseActive'; branch: string }
@@ -315,7 +318,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
         </optgroup>
         <optgroup label="Current worktree">
           <option value="fetchActive">Fetch</option>
-          <option value="pullActive">Pull</option>
+          <option value="pullActive">Pull fast-forward</option>
+          <option value="pullRebaseActive">Pull with rebase</option>
+          <option value="pullMergeActive">Pull with merge...</option>
+          <option value="pullWithStashActive">Stash, pull, unstash...</option>
           <option value="pushActive">Push</option>
           <option value="stashActive">Stash changes...</option>
           <option value="rebaseActive">Rebase onto branch...</option>
@@ -429,6 +435,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
         send('stashActive', { message: stashMessage.value });
         return;
       }
+      if (gitAction.value === 'pullWithStashActive') {
+        send('pullWithStashActive');
+        return;
+      }
       send(gitAction.value);
     });
 
@@ -443,6 +453,12 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
         ? 'Choose the branch to rebase onto, then run.'
         : needsStashMessage
           ? 'Optional stash message. No popup required.'
+          : gitAction.value === 'pullWithStashActive'
+            ? 'Temporarily stashes dirty files, fast-forward pulls, then applies the stash back.'
+          : gitAction.value === 'pullRebaseActive'
+            ? 'Use this when local and remote commits diverged and you want a linear history.'
+          : gitAction.value === 'pullMergeActive'
+            ? 'Creates a merge commit or leaves conflicts to resolve if Git cannot merge cleanly.'
           : needsSelection
         ? 'This action applies to checked files.'
         : 'This action applies to the selected worktree/repo.';

@@ -5,11 +5,13 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { buildTerminalOptions, chooseAgentSelectionsForTreeCommand, getProcessTreeCommands } from './agentUtils'
 import { GitWorktreeDiffDecorationProvider } from './fileDecorations'
-import { addPathToGitignore, addRepo, amendCommit, checkoutBranch, commitFiles, removeRepo, runFileAction, runRepoAction } from './gitApi'
+import { addPathToGitignore, addRepo, amendCommit, checkoutBranch, commitFiles, removeRepo, runConflictAction, runFileAction, runRepoAction, type RepoAction } from './gitApi'
 import { GitContentProvider, gitContentScheme, openCommitDiff, openCommitFileDiff, openNativeDiff } from './gitContentProvider'
 import { CommitFileItem, CommitItem, HistoryTreeProvider } from './historyTree'
 import { FileItem, RepoItem, RepoTreeProvider, WorktreeItem } from './repoTree'
 import type { RepoTarget, WorkbenchSelection } from './types'
+
+type RepoUiAction = 'fetch' | 'pull' | 'pullRebase' | 'pullMerge' | 'pullWithStash' | 'push'
 
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new RepoTreeProvider()
@@ -55,6 +57,9 @@ export function activate(context: vscode.ExtensionContext) {
       if (message.type === 'amendSelected') await amendWithSelectedFiles(treeProvider, message.summary, message.description)
       if (message.type === 'fetchActive') await runPanelRepoAction('fetch', activeTarget, treeProvider)
       if (message.type === 'pullActive') await runPanelRepoAction('pull', activeTarget, treeProvider)
+      if (message.type === 'pullRebaseActive') await runPanelRepoAction('pullRebase', activeTarget, treeProvider)
+      if (message.type === 'pullMergeActive') await runPanelRepoAction('pullMerge', activeTarget, treeProvider)
+      if (message.type === 'pullWithStashActive') await runPanelRepoAction('pullWithStash', activeTarget, treeProvider)
       if (message.type === 'pushActive') await runPanelRepoAction('push', activeTarget, treeProvider)
       if (message.type === 'stashActive') await stashPanelTarget(activeTarget, treeProvider, message.message)
       if (message.type === 'rebaseActive') await rebasePanelTarget(activeTarget, treeProvider, message.branch)
@@ -133,6 +138,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('gitWorktreeDiff.pull', async (item: RepoItem | WorktreeItem) => {
       await runNativeRepoAction('pull', item, treeProvider, historyProvider)
     }),
+    vscode.commands.registerCommand('gitWorktreeDiff.pullWithRebase', async (item: RepoItem | WorktreeItem) => {
+      await runNativeRepoAction('pullRebase', item, treeProvider, historyProvider)
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.pullWithStash', async (item: RepoItem | WorktreeItem) => {
+      await runNativeRepoAction('pullWithStash', item, treeProvider, historyProvider)
+    }),
     vscode.commands.registerCommand('gitWorktreeDiff.push', async (item: RepoItem | WorktreeItem) => {
       await runNativeRepoAction('push', item, treeProvider, historyProvider)
     }),
@@ -156,6 +167,15 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.addToGitignore', async (target: FileItem | WorkbenchSelection) => {
       await addFileToGitignore(selectionFromTarget(target), treeProvider)
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.acceptOurs', async (target: FileItem | WorkbenchSelection) => {
+      await runNativeConflictAction('acceptOurs', selectionFromTarget(target), treeProvider)
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.acceptTheirs', async (target: FileItem | WorkbenchSelection) => {
+      await runNativeConflictAction('acceptTheirs', selectionFromTarget(target), treeProvider)
+    }),
+    vscode.commands.registerCommand('gitWorktreeDiff.markResolved', async (target: FileItem | WorkbenchSelection) => {
+      await runNativeConflictAction('markResolved', selectionFromTarget(target), treeProvider)
     }),
     vscode.commands.registerCommand('gitWorktreeDiff.refreshSidebar', () => {
       treeProvider.refresh()
@@ -242,6 +262,31 @@ async function runNativeFileAction(
     void vscode.window.showInformationMessage(output || `${action} completed`)
   } catch (error) {
     const message = error instanceof Error ? error.message : `Unable to ${action} file`
+    void vscode.window.showErrorMessage(message)
+  }
+}
+
+async function runNativeConflictAction(
+  action: 'acceptOurs' | 'acceptTheirs' | 'markResolved',
+  selection: WorkbenchSelection,
+  treeProvider: RepoTreeProvider,
+) {
+  const label = conflictActionLabel(action)
+  if (action !== 'markResolved') {
+    const confirmed = await vscode.window.showWarningMessage(
+      `${label} for ${selection.filePath}? This overwrites the conflicted file with one side of the merge.`,
+      { modal: true },
+      label,
+    )
+    if (confirmed !== label) return
+  }
+
+  try {
+    const output = await runConflictAction(action, selection)
+    treeProvider.refresh()
+    void vscode.window.showInformationMessage(output || `${label} completed`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Unable to ${label.toLowerCase()}`
     void vscode.window.showErrorMessage(message)
   }
 }
@@ -352,21 +397,20 @@ async function addSelectedToGitignore(treeProvider: RepoTreeProvider) {
 }
 
 async function runPanelRepoAction(
-  action: 'fetch' | 'pull' | 'push',
+  action: RepoUiAction,
   activeTarget: RepoTarget | undefined,
   treeProvider: RepoTreeProvider,
 ) {
   const target = activeTarget || targetFromSelectedFiles(treeProvider.getSelectedFiles())
   if (!target) return
-  if (action === 'push' && !await confirmPush(target)) return
+  if (!await confirmRepoAction(action, target)) return
 
   try {
     const output = await runRepoAction(action, target)
     treeProvider.refresh()
-    void vscode.window.showInformationMessage(output || `${action} completed`)
+    void vscode.window.showInformationMessage(output || `${repoActionLabel(action)} completed`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : `Unable to ${action}`
-    void vscode.window.showErrorMessage(message)
+    await handleRepoActionError(action, target, error, treeProvider)
   }
 }
 
@@ -500,21 +544,82 @@ async function checkoutRepoBranch(
 }
 
 async function runNativeRepoAction(
-  action: 'fetch' | 'pull' | 'push' | 'stageAll' | 'unstageAll',
+  action: RepoUiAction | 'stageAll' | 'unstageAll',
   item: RepoItem | WorktreeItem | undefined,
   treeProvider: RepoTreeProvider,
   historyProvider: HistoryTreeProvider,
 ) {
   if (!item) return
   const target = targetFromItem(item)
-  if (action === 'push' && !await confirmPush(target)) return
+  if (!await confirmRepoAction(action, target)) return
   try {
     const output = await runRepoAction(action, target)
     treeProvider.refresh()
     historyProvider.refresh()
-    void vscode.window.showInformationMessage(output || `${action} completed`)
+    void vscode.window.showInformationMessage(output || `${repoActionLabel(action)} completed`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : `Unable to ${action}`
+    await handleRepoActionError(action, target, error, treeProvider, historyProvider)
+  }
+}
+
+async function handleRepoActionError(
+  action: RepoAction,
+  target: RepoTarget,
+  error: unknown,
+  treeProvider: RepoTreeProvider,
+  historyProvider?: HistoryTreeProvider,
+) {
+  const message = error instanceof Error ? error.message : `Unable to ${repoActionLabel(action)}`
+
+  if (action === 'pull' && isFastForwardOnlyFailure(message)) {
+    const choice = await vscode.window.showWarningMessage(
+      `${targetLabel(target)} has diverged from its upstream. Fast-forward pull cannot run; choose rebase for a linear history or merge to preserve both branch histories.`,
+      'Pull with Rebase',
+      'Pull with Merge',
+      'Show Error',
+    )
+    if (choice === 'Pull with Rebase') {
+      await retryRepoAction('pullRebase', target, treeProvider, historyProvider)
+      return
+    }
+    if (choice === 'Pull with Merge') {
+      await retryRepoAction('pullMerge', target, treeProvider, historyProvider)
+      return
+    }
+    if (choice !== 'Show Error') return
+  }
+
+  if (action === 'pull' && isDirtyWorktreePullFailure(message)) {
+    const choice = await vscode.window.showWarningMessage(
+      `${targetLabel(target)} has local changes that block pull. You can temporarily stash them, pull, then apply the stash back.`,
+      'Stash, Pull, Unstash',
+      'Show Error',
+    )
+    if (choice === 'Stash, Pull, Unstash') {
+      await retryRepoAction('pullWithStash', target, treeProvider, historyProvider)
+      return
+    }
+    if (choice !== 'Show Error') return
+  }
+
+  void vscode.window.showErrorMessage(message)
+}
+
+async function retryRepoAction(
+  action: RepoUiAction,
+  target: RepoTarget,
+  treeProvider: RepoTreeProvider,
+  historyProvider?: HistoryTreeProvider,
+) {
+  if (!await confirmRepoAction(action, target)) return
+
+  try {
+    const output = await runRepoAction(action, target)
+    treeProvider.refresh()
+    historyProvider?.refresh()
+    void vscode.window.showInformationMessage(output || `${repoActionLabel(action)} completed`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Unable to ${repoActionLabel(action)}`
     void vscode.window.showErrorMessage(message)
   }
 }
@@ -545,6 +650,50 @@ async function confirmPush(target: RepoTarget) {
     'Push Commits',
   )
   return confirmed === 'Push Commits'
+}
+
+async function confirmRepoAction(action: RepoAction, target: RepoTarget) {
+  if (action === 'push') return confirmPush(target)
+  if (action === 'pullMerge') {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Pull into ${targetLabel(target)} using merge? This may create a merge commit or leave conflicts to resolve.`,
+      { modal: true },
+      'Pull with Merge',
+    )
+    return confirmed === 'Pull with Merge'
+  }
+  if (action === 'pullWithStash') {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Temporarily stash local changes in ${targetLabel(target)}, pull with fast-forward, then apply the stash back?`,
+      { modal: true },
+      'Stash, Pull, Unstash',
+    )
+    return confirmed === 'Stash, Pull, Unstash'
+  }
+  return true
+}
+
+function repoActionLabel(action: RepoAction) {
+  if (action === 'pullRebase') return 'pull with rebase'
+  if (action === 'pullMerge') return 'pull with merge'
+  if (action === 'pullWithStash') return 'stash, pull, unstash'
+  if (action === 'stageAll') return 'stage all'
+  if (action === 'unstageAll') return 'unstage all'
+  return action
+}
+
+function conflictActionLabel(action: 'acceptOurs' | 'acceptTheirs' | 'markResolved') {
+  if (action === 'acceptOurs') return 'Accept Current (Ours)'
+  if (action === 'acceptTheirs') return 'Accept Incoming (Theirs)'
+  return 'Mark Resolved'
+}
+
+function isFastForwardOnlyFailure(message: string) {
+  return /not possible to fast-forward|diverging branches|cannot fast-forward/i.test(message)
+}
+
+function isDirtyWorktreePullFailure(message: string) {
+  return /local changes.*would be overwritten|commit your changes or stash them|cannot pull with rebase: you have unstaged changes/i.test(message)
 }
 
 function targetLabel(target: RepoTarget) {

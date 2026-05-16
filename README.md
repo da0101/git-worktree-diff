@@ -74,13 +74,13 @@ npm run package:extension
 This creates:
 
 ```text
-git-worktree-diff-1.2.3.vsix
+git-worktree-diff-1.2.4.vsix
 ```
 
 Install it into your normal VS Code user profile:
 
 ```bash
-code --install-extension git-worktree-diff-1.2.3.vsix --force
+code --install-extension git-worktree-diff-1.2.4.vsix --force
 ```
 
 After installing, restart VS Code. The Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
@@ -156,6 +156,6 @@ git push origin main vX.Y.Z
 Release tags use semantic versioning:
 
 ```bash
-git tag -a v1.2.3 -m "Release v1.2.3"
-git push origin v1.2.3
+git tag -a v1.2.4 -m "Release v1.2.4"
+git push origin v1.2.4
 ```

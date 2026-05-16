@@ -2,7 +2,7 @@
   "name": "git-worktree-diff",
   "displayName": "Worktree Diff",
   "description": "Inspect local Git diffs across repositories, branches, and worktrees from inside VS Code.",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "publisher": "danilulmashev",
   "license": "UNLICENSED",
@@ -108,9 +108,21 @@
       },
       {
         "command": "gitWorktreeDiff.pull",
-        "title": "Pull",
+        "title": "Pull Fast-Forward",
         "category": "Worktree Diff",
         "icon": "$(arrow-down)"
+      },
+      {
+        "command": "gitWorktreeDiff.pullWithRebase",
+        "title": "Pull with Rebase",
+        "category": "Worktree Diff",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "gitWorktreeDiff.pullWithStash",
+        "title": "Stash, Pull, Unstash",
+        "category": "Worktree Diff",
+        "icon": "$(archive)"
       },
       {
         "command": "gitWorktreeDiff.push",
@@ -153,6 +165,24 @@
         "title": "Add to .gitignore",
         "category": "Worktree Diff",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "gitWorktreeDiff.acceptOurs",
+        "title": "Accept Current (Ours)",
+        "category": "Worktree Diff",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitWorktreeDiff.acceptTheirs",
+        "title": "Accept Incoming (Theirs)",
+        "category": "Worktree Diff",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitWorktreeDiff.markResolved",
+        "title": "Mark Resolved",
+        "category": "Worktree Diff",
+        "icon": "$(check-all)"
       },
       {
         "command": "gitWorktreeDiff.selectAllChangedFiles",
@@ -269,6 +299,21 @@
           "group": "navigation"
         },
         {
+          "command": "gitWorktreeDiff.acceptOurs",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem == file-conflicted",
+          "group": "inline"
+        },
+        {
+          "command": "gitWorktreeDiff.acceptTheirs",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem == file-conflicted",
+          "group": "inline"
+        },
+        {
+          "command": "gitWorktreeDiff.markResolved",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem == file-conflicted",
+          "group": "inline"
+        },
+        {
           "command": "gitWorktreeDiff.checkoutBranch",
           "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|main-worktree/",
           "group": "navigation"
@@ -280,6 +325,16 @@
         },
         {
           "command": "gitWorktreeDiff.pull",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|worktree/",
+          "group": "navigation"
+        },
+        {
+          "command": "gitWorktreeDiff.pullWithRebase",
+          "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|worktree/",
+          "group": "navigation"
+        },
+        {
+          "command": "gitWorktreeDiff.pullWithStash",
           "when": "view == gitWorktreeDiff.sidebar && viewItem =~ /repo|worktree/",
           "group": "navigation"
         },

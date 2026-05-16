@@ -69,8 +69,20 @@ export async function listBranches(repoPath: string): Promise<string[]> {
     .filter(branch => branch && !branch.endsWith('/HEAD'))
 }
 
+export type RepoAction =
+  | 'fetch'
+  | 'pull'
+  | 'pullRebase'
+  | 'pullMerge'
+  | 'pullWithStash'
+  | 'push'
+  | 'rebase'
+  | 'stageAll'
+  | 'unstageAll'
+  | 'stash'
+
 export async function runRepoAction(
-  action: 'fetch' | 'pull' | 'push' | 'rebase' | 'stageAll' | 'unstageAll' | 'stash',
+  action: RepoAction,
   target: RepoTarget,
   options: { branch?: string; remote?: string; message?: string } = {},
 ): Promise<string> {
@@ -79,6 +91,9 @@ export async function runRepoAction(
 
   if (action === 'fetch') return git(repoPath, ['fetch', remote, '--prune'])
   if (action === 'pull') return git(repoPath, ['pull', '--ff-only'])
+  if (action === 'pullRebase') return git(repoPath, ['pull', '--rebase'])
+  if (action === 'pullMerge') return git(repoPath, ['pull', '--no-rebase'])
+  if (action === 'pullWithStash') return pullWithAutoStash(repoPath, options.message)
   if (action === 'push') return git(repoPath, ['push', remote, 'HEAD'])
   if (action === 'stageAll') return git(repoPath, ['add', '--all'])
   if (action === 'unstageAll') return git(repoPath, ['restore', '--staged', '--', '.'])
@@ -91,6 +106,30 @@ export async function runRepoAction(
   throw new Error(`Unsupported action: ${action}`)
 }
 
+async function pullWithAutoStash(repoPath: string, message?: string): Promise<string> {
+  const stashOutput = await git(repoPath, ['stash', 'push', '-u', '-m', message || 'Git Worktree Diff auto-stash before pull'])
+  const stashed = !/No local changes to save/i.test(stashOutput)
+
+  let pullOutput = ''
+  try {
+    pullOutput = await git(repoPath, ['pull', '--ff-only'])
+  } catch (error) {
+    if (stashed) {
+      throw new Error(`${messageFromError(error)}\n\nYour local changes are still safely stored in the latest Git stash.`)
+    }
+    throw error
+  }
+
+  if (!stashed) return pullOutput
+
+  try {
+    const popOutput = await git(repoPath, ['stash', 'pop'])
+    return [stashOutput, pullOutput, popOutput].filter(Boolean).join('\n')
+  } catch (error) {
+    throw new Error(`${messageFromError(error)}\n\nPull completed, but applying the stash produced conflicts. Resolve them, then stage the resolved files.`)
+  }
+}
+
 export async function runFileAction(action: 'stage' | 'unstage' | 'reject', selection: WorkbenchSelection): Promise<string> {
   if (!selection.filePath) {
     throw new Error('No file selected')
@@ -100,6 +139,23 @@ export async function runFileAction(action: 'stage' | 'unstage' | 'reject', sele
   if (action === 'stage') return git(repoPath, ['add', '--', selection.filePath])
   if (action === 'unstage') return git(repoPath, ['restore', '--staged', '--', selection.filePath])
   return git(repoPath, ['restore', '--staged', '--worktree', '--', selection.filePath])
+}
+
+export async function runConflictAction(action: 'acceptOurs' | 'acceptTheirs' | 'markResolved', selection: WorkbenchSelection): Promise<string> {
+  if (!selection.filePath) {
+    throw new Error('No file selected')
+  }
+
+  const repoPath = selection.worktreePath || selection.repoPath
+  if (action === 'acceptOurs') {
+    await git(repoPath, ['checkout', '--ours', '--', selection.filePath])
+    return git(repoPath, ['add', '--', selection.filePath])
+  }
+  if (action === 'acceptTheirs') {
+    await git(repoPath, ['checkout', '--theirs', '--', selection.filePath])
+    return git(repoPath, ['add', '--', selection.filePath])
+  }
+  return git(repoPath, ['add', '--', selection.filePath])
 }
 
 export async function commitFiles(repoPath: string, files: string[], message: string, body?: string): Promise<string> {
@@ -157,6 +213,10 @@ export async function git(repoPath: string, args: string[], options: { maxBuffer
     timeout: options.timeout ?? 15_000,
   })
   return (stdout || stderr).trimEnd()
+}
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 async function summarizeRepo(repo: { path: string }): Promise<RepoSummary> {
