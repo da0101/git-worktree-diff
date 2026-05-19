@@ -1,4 +1,8 @@
 const assert = require('node:assert/strict')
+const { execFileSync } = require('node:child_process')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const test = require('node:test')
 
 const {
@@ -12,6 +16,7 @@ const {
   parseStatusChangedFiles,
   parseWorkingTreeChangedFiles,
   parseWorktrees,
+  runFileAction,
 } = require('../out/gitApi.js')
 
 test('buildCommitArgs limits commits to selected files', () => {
@@ -40,6 +45,18 @@ test('buildAmendArgs can amend only selected files without changing the message'
     '--',
     'src/a.ts',
   ])
+})
+
+test('runFileAction discards untracked files by deleting the repo-relative file', async () => {
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'git-worktree-diff-untracked-'))
+  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'ignore' })
+  const filePath = 'test-inspector-report.md'
+  const absoluteFilePath = path.join(repoPath, filePath)
+  fs.writeFileSync(absoluteFilePath, 'temporary report\n')
+
+  await runFileAction('reject', { repoPath, filePath, fileStatus: 'untracked' })
+
+  assert.equal(fs.existsSync(absoluteFilePath), false)
 })
 
 test('parseChangedFiles returns additions and deletions for modified files', () => {

@@ -138,7 +138,33 @@ export async function runFileAction(action: 'stage' | 'unstage' | 'reject', sele
   const repoPath = selection.worktreePath || selection.repoPath
   if (action === 'stage') return git(repoPath, ['add', '--', selection.filePath])
   if (action === 'unstage') return git(repoPath, ['restore', '--staged', '--', selection.filePath])
+  return discardFile(repoPath, selection)
+}
+
+async function discardFile(repoPath: string, selection: WorkbenchSelection) {
+  if (!selection.filePath) throw new Error('No file selected')
+  if (selection.fileStatus === 'untracked') return removeRepoRelativeFile(repoPath, selection.filePath, 'Discarded untracked file')
+  if (selection.fileStatus === 'added') {
+    await git(repoPath, ['rm', '--cached', '--ignore-unmatch', '--', selection.filePath])
+    return removeRepoRelativeFile(repoPath, selection.filePath, 'Discarded added file')
+  }
   return git(repoPath, ['restore', '--staged', '--worktree', '--', selection.filePath])
+}
+
+async function removeRepoRelativeFile(repoPath: string, filePath: string, label: string) {
+  const absolutePath = resolveRepoRelativeFile(repoPath, filePath)
+  await fs.rm(absolutePath, { force: true })
+  return `${label}: ${filePath}`
+}
+
+function resolveRepoRelativeFile(repoPath: string, filePath: string) {
+  if (path.isAbsolute(filePath)) throw new Error('Refusing to discard an absolute file path')
+  const absolutePath = path.resolve(repoPath, filePath)
+  const relativePath = path.relative(repoPath, absolutePath)
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('Refusing to discard a file outside the repository')
+  }
+  return absolutePath
 }
 
 export async function runConflictAction(action: 'acceptOurs' | 'acceptTheirs' | 'markResolved', selection: WorkbenchSelection): Promise<string> {

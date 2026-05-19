@@ -2,7 +2,7 @@
   "name": "git-worktree-diff",
   "displayName": "Worktree Diff",
   "description": "Inspect local Git diffs across repositories, branches, and worktrees from inside VS Code.",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "private": true,
   "publisher": "danilulmashev",
   "license": "UNLICENSED",
