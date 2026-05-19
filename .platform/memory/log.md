@@ -5,6 +5,8 @@ One line per completed task. Newest at the top. Append-only.
 Format: `YYYY-MM-DD — <task> — <outcome> — <takeaway>`
 
 ---
+- 2026-05-19 — debug: checkout branch dropdown resets — fixed root cause by avoiding option-list DOM rebuilds during periodic webview state refreshes — webview selects must preserve user choice unless options or target change
+- 2026-05-19 — commit `47ac69b`: Fix discard for untracked files — auto-logged
 - 2026-05-19 — debug: discard untracked selected files — fixed root cause by routing untracked/added files through safe repo-relative file removal instead of `git restore` — discard actions must branch by Git file state
 - 2026-05-16 — vscode-agent-handoff — closed by user — terminal handoff, native Git commands shipped in v1.2.x releases
 - 2026-05-16 — vscode-native-sidebar — closed by user — Activity Bar, sidebar, History view, native diff/stage/discard shipped in v1.2.0–v1.2.4

@@ -358,6 +358,7 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
     let activeTab = 'commit';
     let checkoutCanRun = false;
     let checkoutHasTarget = false;
+    let lastCheckoutTargetLabel = '';
 
     const summary = document.getElementById('summary');
     const description = document.getElementById('description');
@@ -475,6 +476,34 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       checkoutBranch.disabled = !canCheckout || !hasBranch;
     }
 
+    function syncSelectOptions(select, items, valueFor, labelFor) {
+      const next = items.map(item => ({
+        value: valueFor(item),
+        label: labelFor(item),
+      }));
+      const current = [...select.options].map(option => ({
+        value: option.value,
+        label: option.textContent || '',
+      }));
+      const unchanged = next.length === current.length
+        && next.every((item, index) => item.value === current[index].value && item.label === current[index].label);
+      if (unchanged) return;
+
+      const previousValue = select.value;
+      select.innerHTML = '';
+      for (const item of next) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        select.appendChild(option);
+      }
+      if (hasOptionValue(select, previousValue)) select.value = previousValue;
+    }
+
+    function hasOptionValue(select, value) {
+      return [...select.options].some(option => option.value === value);
+    }
+
     window.addEventListener('message', event => {
       if (event.data.type === 'composeAgent') {
         agentContext.textContent = event.data.agentContextLabel || 'Selected context';
@@ -491,7 +520,10 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       checkoutCanRun = Boolean(event.data.canCheckoutBranch);
       checkoutHasTarget = Boolean(event.data.hasCheckoutTarget);
       const currentCheckoutBranch = event.data.checkoutCurrentBranch || '';
-      target.textContent = event.data.activeTargetLabel || 'No worktree selected';
+      const nextTargetLabel = event.data.activeTargetLabel || 'No worktree selected';
+      const checkoutTargetChanged = nextTargetLabel !== lastCheckoutTargetLabel;
+      lastCheckoutTargetLabel = nextTargetLabel;
+      target.textContent = nextTargetLabel;
       agentContext.textContent = event.data.agentContextLabel || 'No agent context selected';
       count.textContent = selectedFiles + (selectedFiles === 1 ? ' file' : ' files') + (repositories > 1 ? ' / ' + repositories + ' worktrees' : '');
       agentCount.textContent = count.textContent;
@@ -501,31 +533,33 @@ export class ActionPanelProvider implements vscode.WebviewViewProvider {
       syncGitActionState();
       const oldValue = terminal.value;
       const oldBranch = rebaseBranch.value;
-      terminal.innerHTML = '';
-      for (const item of event.data.terminals || []) {
-        const option = document.createElement('option');
-        option.value = item.id;
-        option.textContent = item.active ? item.label + ' (active)' : item.label;
-        terminal.appendChild(option);
-      }
+      const oldCheckoutBranch = checkoutBranch.value;
+      syncSelectOptions(
+        terminal,
+        event.data.terminals || [],
+        item => item.id,
+        item => item.active ? item.label + ' (active)' : item.label,
+      );
       if ([...terminal.options].some(option => option.value === oldValue)) terminal.value = oldValue;
-      rebaseBranch.innerHTML = '';
-      for (const item of event.data.branches || []) {
-        const option = document.createElement('option');
-        option.value = item.name;
-        option.textContent = item.name;
-        rebaseBranch.appendChild(option);
-      }
+      syncSelectOptions(
+        rebaseBranch,
+        event.data.branches || [],
+        item => item.name,
+        item => item.name,
+      );
       if ([...rebaseBranch.options].some(option => option.value === oldBranch)) rebaseBranch.value = oldBranch;
-      checkoutBranch.innerHTML = '';
       checkoutBranch.dataset.currentBranch = currentCheckoutBranch;
-      for (const item of event.data.checkoutBranches || []) {
-        const option = document.createElement('option');
-        option.value = item.name;
-        option.textContent = item.name;
-        checkoutBranch.appendChild(option);
+      syncSelectOptions(
+        checkoutBranch,
+        event.data.checkoutBranches || [],
+        item => item.name,
+        item => item.name,
+      );
+      if (!checkoutTargetChanged && hasOptionValue(checkoutBranch, oldCheckoutBranch)) {
+        checkoutBranch.value = oldCheckoutBranch;
+      } else if (hasOptionValue(checkoutBranch, currentCheckoutBranch)) {
+        checkoutBranch.value = currentCheckoutBranch;
       }
-      if ([...checkoutBranch.options].some(option => option.value === currentCheckoutBranch)) checkoutBranch.value = currentCheckoutBranch;
       syncCheckoutState(checkoutCanRun, checkoutHasTarget, currentCheckoutBranch);
       syncGitActionState();
     });

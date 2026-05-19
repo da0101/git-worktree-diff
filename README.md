@@ -74,13 +74,13 @@ npm run package:extension
 This creates:
 
 ```text
-git-worktree-diff-1.2.7.vsix
+git-worktree-diff-1.2.8.vsix
 ```
 
 Install it into your normal VS Code user profile:
 
 ```bash
-code --install-extension git-worktree-diff-1.2.7.vsix --force
+code --install-extension git-worktree-diff-1.2.8.vsix --force
 ```
 
 After installing, restart VS Code. The Worktree Diff icon is available globally in the Activity Bar for all projects opened with the same VS Code profile.
